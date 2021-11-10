@@ -1,5 +1,7 @@
 #!/bin/bash
-TEMP=$(getopt -o c: --long cluster-nodes: -n "$0" -- "$@")
+NODEGROUP_NAME="vmware-ca-k8s"
+
+TEMP=$(getopt -o c:g: --long node-group:,cluster-nodes: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -10,7 +12,10 @@ while true; do
         CLUSTER_NODES="$2"
         shift 2
         ;;
-
+    -g|--node-group)
+        NODEGROUP_NAME=$2
+        shift 2
+        ;;
     --)
         shift
         break
@@ -36,9 +41,9 @@ do
     ETCDNAMES+=(${HOST%%.*})
 done
 
-mkdir -p ./cluster/etcd/ssl
+mkdir -p ./cluster/${NODEGROUP_NAME}/etcd/ssl
 
-cat > ./cluster/etcd/ca-config.json <<EOF
+cat > ./cluster/${NODEGROUP_NAME}/etcd/ca-config.json <<EOF
 {
   "signing": {
     "default": {
@@ -59,7 +64,7 @@ cat > ./cluster/etcd/ca-config.json <<EOF
 }
 EOF
 
-cat > ./cluster/etcd/ca-csr.json <<EOF
+cat > ./cluster/${NODEGROUP_NAME}/etcd/ca-csr.json <<EOF
 {
   "CN": "kubernetes",
   "key": {
@@ -78,7 +83,7 @@ cat > ./cluster/etcd/ca-csr.json <<EOF
 }
 EOF
 
-cat > ./cluster/etcd/etcd-csr.json <<EOF
+cat > ./cluster/${NODEGROUP_NAME}/etcd/etcd-csr.json <<EOF
 {
     "CN": "etcd",
     "hosts": [
@@ -109,7 +114,7 @@ cat > ./cluster/etcd/etcd-csr.json <<EOF
 }
 EOF
 
-pushd ./cluster/etcd/
+pushd ./cluster/${NODEGROUP_NAME}/etcd
 cfssl gencert -initca ca-csr.json | cfssljson -bare ./ssl/ca
 cfssl gencert -ca=./ssl/ca.pem -ca-key=./ssl/ca-key.pem -config=ca-config.json -profile=kubernetes etcd-csr.json | cfssljson -bare ./ssl/etcd
 popd
@@ -122,7 +127,7 @@ do
     HOST=${ETCDHOSTS[$INDEX]}
     NAME=${ETCDNAMES[$INDEX]}
     ETCINDEX="0$((INDEX+1))"
-    SERVICE=./cluster/etcd/etcd-${ETCINDEX}.service
+    SERVICE=./cluster/${NODEGROUP_NAME}/etcd/etcd-${ETCINDEX}.service
 
     cat > ${SERVICE} << EOF
 [Unit]
@@ -134,26 +139,27 @@ Documentation=https://github.com/coreos
 [Service]
 Type=notify
 WorkingDirectory=/var/lib/etcd/
-ExecStart=/usr/local/bin/etcd \
-    --name=${NAME} \
-    --advertise-client-urls=https://${IP}:2379 \
-    --cert-file=/etc/etcd/ssl/etcd.pem \
-    --key-file=/etc/etcd/ssl/etcd-key.pem \
-    --peer-cert-file=/etc/etcd/ssl/etcd.pem \
-    --peer-key-file=/etc/etcd/ssl/etcd-key.pem \
-    --trusted-ca-file=/etc/etcd/ssl/ca.pem \
-    --peer-trusted-ca-file=/etc/etcd/ssl/ca.pem \
-    --data-dir=/var/lib/etcd \
-    --initial-advertise-peer-urls=https://${IP}:2380 \
-    --initial-cluster-state=new \
-    --initial-cluster-token=etcd-cluster-0 \
-    --initial-cluster=${ETCDNAMES[0]}=https://${ETCDIPS[0]}:2380,${ETCDNAMES[1]}=https://${ETCDIPS[1]}:2380,${ETCDNAMES[2]}=https://${ETCDIPS[2]}:2380 \
-    --listen-client-urls=https://${IP}:2379,http://127.0.0.1:2379 \
-    --listen-metrics-urls=http://127.0.0.1:2381 \
+ExecStart=/usr/local/bin/etcd \\
+    --name=${NAME} \\
+    --advertise-client-urls=https://${IP}:2379 \\
+    --cert-file=/etc/etcd/ssl/etcd.pem \\
+    --key-file=/etc/etcd/ssl/etcd-key.pem \\
+    --peer-cert-file=/etc/etcd/ssl/etcd.pem \\
+    --peer-key-file=/etc/etcd/ssl/etcd-key.pem \\
+    --trusted-ca-file=/etc/etcd/ssl/ca.pem \\
+    --peer-trusted-ca-file=/etc/etcd/ssl/ca.pem \\
+    --data-dir=/var/lib/etcd \\
+    --initial-advertise-peer-urls=https://${IP}:2380 \\
+    --initial-cluster-state=new \\
+    --initial-cluster-token=etcd-cluster-0 \\
+    --initial-cluster=${ETCDNAMES[0]}=https://${ETCDIPS[0]}:2380,${ETCDNAMES[1]}=https://${ETCDIPS[1]}:2380,${ETCDNAMES[2]}=https://${ETCDIPS[2]}:2380 \\
+    --listen-client-urls=https://${IP}:2379,http://127.0.0.1:2379 \\
+    --listen-metrics-urls=http://127.0.0.1:2381 \\
     --listen-peer-urls=https://${IP}:2380
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
+
 [Install]
 WantedBy=multi-user.target
 EOF
