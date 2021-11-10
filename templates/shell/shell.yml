@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ubuntu-shell
+  namespace: kube-system
+  labels:
+    k8s-app: ubuntu-shell
+spec:
+  selector:
+    matchLabels:
+      name: ubuntu-shell
+  template:
+    metadata:
+      labels:
+        name: ubuntu-shell
+    spec:
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+      containers:
+      - name: ubuntu-shell
+        image: fred78290/ubuntu:focal
+        command: 
+          - /bin/sh
+          - -c
+          - while true; do sleep 1; done
+        resources:
+          limits:
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
+      terminationGracePeriodSeconds: 30

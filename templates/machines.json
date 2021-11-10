@@ -1,0 +1,27 @@
+{
+    "tiny": {
+        "memsize": 1024,
+        "vcpus": 1,
+        "disksize": 10240
+    },
+    "small": {
+        "memsize": 2048,
+        "vcpus": 2,
+        "disksize": 10240
+    },
+    "medium": {
+        "memsize": 4096,
+        "vcpus": 2,
+        "disksize": 20480
+    },
+    "large": {
+        "memsize": 8192,
+        "vcpus": 4,
+        "disksize": 51200
+    },
+    "extra-large": {
+        "memsize": 16384,
+        "vcpus": 4,
+        "disksize": 102400
+    }
+}

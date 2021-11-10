@@ -1,0 +1,13 @@
+{
+    "address": "$CONNECTTO",
+    "secret": "vmware",
+    "timeout": 300,
+    "config": {
+        "kubeAdmAddress": "$MASTER_IP",
+        "kubeAdmToken": "$TOKEN",
+        "kubeAdmCACert": "sha256:$CACERT",
+        "kubeAdmExtraArguments": [
+            "--ignore-preflight-errors=All"
+        ]
+    }
+}

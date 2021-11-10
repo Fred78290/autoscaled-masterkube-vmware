@@ -1,0 +1,25 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+\.vscode/
+
+*.code-workspace
+
+out
+cluster/*
+kubernetes/*
+config/*
+etc/ssl/*
+
+guestinfos/*\.txt
+guestinfos/*\.json
+guestinfos/*\.yaml
+
+bin/govc.defs
