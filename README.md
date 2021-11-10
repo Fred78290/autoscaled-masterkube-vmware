@@ -1,3 +1,5 @@
+[![Licence](https://img.shields.io/badge/License-GPL_v2-blue.svg)](https://github.com/Fred78290/autoscaled-masterkube-vmware/blob/master/LICENSE)
+
 # Introduction
 
 This directory contains everthing to create a single autoscaled cluster or HA cluster with worker node on vSphere infrastructure.
