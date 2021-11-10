@@ -86,7 +86,7 @@ export GOVCDEFS=${CURDIR}/govc.defs
 MACHINE_DEFS=$(cat ${CURDIR}/../templates/machines.json)
 
 SSH_OPTIONS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
-SCP_OPTIONS="${SSH_OPTIONS} -r"
+SCP_OPTIONS="${SSH_OPTIONS} -p -r"
 
 # import govc hidden definitions
 source ${GOVCDEFS}
@@ -805,6 +805,7 @@ EOF
         echo_title "Prepare ${MASTERKUBE_NODE} instance"
         eval govc host.autostart.add -host="${VMHOST}" "${MASTERKUBE_NODE}" $SILENT
         eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ $SILENT
+        eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} mkdir -p /home/${KUBERNETES_USER}/cluster $SILENT
         eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin $SILENT
 
         # Update /etc/hosts
@@ -862,7 +863,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
                 echo_title "Start etcd node: ${IPADDR}"
                 
                 eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ $SILENT
-                eval scp ${SCP_OPTIONS} cluster/${NODEGROUP_NAME} ${KUBERNETES_USER}@${IPADDR}:~/cluster ${SILENT}
+                eval scp ${SCP_OPTIONS} cluster/${NODEGROUP_NAME}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster ${SILENT}
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin $SILENT
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo install-etcd.sh --user=${KUBERNETES_USER} --cluster-nodes="${CLUSTER_NODES}" --node-index="$INDEX" $SILENT
@@ -1009,7 +1010,7 @@ do
             elif [[ $INDEX > $CONTROLNODES ]] || [ "$HA_CLUSTER" = "false" ]; then
                     echo_blue_bold "Join node ${MASTERKUBE_NODE} instance worker node, kubernetes version=${KUBERNETES_VERSION}, providerID=${PROVIDERID}"
 
-                    eval scp ${SCP_OPTIONS} ./cluster/${NODEGROUP_NAME} ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
+                    eval scp ${SCP_OPTIONS} ./cluster/${NODEGROUP_NAME}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
                     eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
                         --use-external-etcd=${EXTERNAL_ETCD} \
@@ -1021,7 +1022,7 @@ do
             else
                 echo_blue_bold "Join node ${MASTERKUBE_NODE} instance master node, kubernetes version=${KUBERNETES_VERSION}, providerID=${PROVIDERID}"
 
-                eval scp ${SCP_OPTIONS} ./cluster/${NODEGROUP_NAME} ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
+                eval scp ${SCP_OPTIONS} ./cluster/${NODEGROUP_NAME}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
                     --use-external-etcd=${EXTERNAL_ETCD} \
