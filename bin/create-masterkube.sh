@@ -852,7 +852,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
     if [ "$EXTERNAL_ETCD" = "true" ]; then
         echo_title "Created etcd cluster: ${CLUSTER_NODES}"
 
-        prepare-etcd.sh --cluster-nodes="${CLUSTER_NODES}"
+        prepare-etcd.sh --node-group=${NODEGROUP_NAME} --cluster-nodes="${CLUSTER_NODES}"
 
         for INDEX in $(seq 1 $CONTROLNODES)
         do
