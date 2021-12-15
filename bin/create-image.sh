@@ -72,7 +72,7 @@ while true ; do
                     ;;
                 "cri-o"|"containerd")
                     CONTAINER_ENGINE="$2"
-                    CONTAINER_CTL=podman
+                    CONTAINER_CTL=crictl
                     ;;
                 *)
                     echo "Unsupported container runtime: $2"
@@ -313,6 +313,18 @@ OS=x${NAME}_${VERSION_ID}
 
 systemctl disable apparmor
 
+echo "Prepare to install CNI plugins"
+
+echo "==============================================================================================================================="
+echo "= Install CNI plugins"
+echo "==============================================================================================================================="
+
+curl -sL "https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGIN_VERSION}/cni-plugins-linux-${SEED_ARCH}-${CNI_PLUGIN_VERSION}.tgz" | tar -C /opt/cni/bin -xz
+
+ls -l /opt/cni/bin
+
+echo
+
 if [ "${CONTAINER_ENGINE}" = "docker" ]; then
 
     echo "==============================================================================================================================="
@@ -346,18 +358,17 @@ SHELL
 elif [ "${CONTAINER_ENGINE}" == "containerd" ]; then
 
     echo "==============================================================================================================================="
-    echo "Install Containerd & podman repositories"
+    echo "Install Containerd"
     echo "==============================================================================================================================="
 
-    echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
-    curl -sL https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$CRIO_VERSION/$OS/Release.key | sudo apt-key --keyring /etc/apt/trusted.gpg.d/libcontainers-cri-o.gpg add -
-
     apt-get update
-    apt-get -y install containerd podman
+
+    curl -sL  https://github.com/containerd/containerd/releases/download/v1.5.8/cri-containerd-cni-1.5.8-linux-amd64.tar.gz | tar -C / -xz
 
     mkdir -p /etc/containerd
     containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/g' | tee /etc/containerd/config.toml
 
+    systemctl enable containerd.service
     systemctl restart containerd
 else
 
@@ -365,50 +376,37 @@ else
     echo "Install CRI-O repositories"
     echo "==============================================================================================================================="
 
-    echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
     echo "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$CRIO_VERSION/$OS/ /" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:$CRIO_VERSION.list
-
-    curl -sL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | sudo apt-key --keyring /etc/apt/trusted.gpg.d/libcontainers.gpg add -
     curl -sL https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$CRIO_VERSION/$OS/Release.key | sudo apt-key --keyring /etc/apt/trusted.gpg.d/libcontainers-cri-o.gpg add -
 
     apt update
-    apt install podman cri-o cri-o-runc -y
+    apt install cri-o cri-o-runc -y
     echo
 
     mkdir -p /etc/crio/crio.conf.d/
 
-    cat > /etc/crio/crio.conf.d/02-cgroup-manager.conf <<SHELL
-conmon_cgroup = "pod"
-cgroup_manager = "cgroupfs"
-SHELL
+#    cat > /etc/crio/crio.conf.d/02-cgroup-manager.conf <<SHELL
+#conmon_cgroup = "pod"
+#cgroup_manager = "cgroupfs"
+#SHELL
 
     systemctl daemon-reload
     systemctl enable crio
     systemctl restart crio
 fi
 
-echo "==============================================================================================================================="
-echo "= Install crictl"
-echo "==============================================================================================================================="
-curl -sL https://github.com/kubernetes-sigs/cri-tools/releases/download/v${CRIO_VERSION}.0/crictl-v${CRIO_VERSION}.0-linux-${SEED_ARCH}.tar.gz  | tar -C /usr/local/bin -xz
-chmod +x /usr/local/bin/crictl
+if [ ! -f /usr/local/bin/crictl ]; then
+    echo "==============================================================================================================================="
+    echo "= Install crictl"
+    echo "==============================================================================================================================="
+    curl -sL https://github.com/kubernetes-sigs/cri-tools/releases/download/v${CRIO_VERSION}.0/crictl-v${CRIO_VERSION}.0-linux-${SEED_ARCH}.tar.gz  | tar -C /usr/local/bin -xz
+    chmod +x /usr/local/bin/crictl
+fi
 
 echo "==============================================================================================================================="
 echo "= Clean ubuntu distro"
 echo "==============================================================================================================================="
 apt-get autoremove -y
-echo
-
-echo "Prepare to install CNI plugins"
-
-echo "==============================================================================================================================="
-echo "= Install CNI plugins"
-echo "==============================================================================================================================="
-
-curl -sL "https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGIN_VERSION}/cni-plugins-linux-${SEED_ARCH}-${CNI_PLUGIN_VERSION}.tgz" | tar -C /opt/cni/bin -xz
-
-ls -l /opt/cni/bin
-
 echo
 
 echo "==============================================================================================================================="
@@ -505,6 +503,13 @@ exclude-nics=docker*,veth*,vEthernet*,flannel*,cni*,calico*
 primary-nics=eth0
 low-priority-nics=eth1,eth2,eth3
 SHELL
+
+echo "==============================================================================================================================="
+echo "= Cleanup"
+echo "==============================================================================================================================="
+
+# Delete default cni config from containerd
+rm -rf /etc/cni/net.d/*
 
 [ -f /etc/cloud/cloud.cfg.d/50-curtin-networking.cfg ] && rm /etc/cloud/cloud.cfg.d/50-curtin-networking.cfg
 rm /etc/netplan/*
