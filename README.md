@@ -12,13 +12,11 @@ You must also install
 
 |Linux|MacOS|
 | --- | --- |
-|    kubectl|kubectl|
-|    govc|govc|
-|    jq|jq|
-|    python|python|
-|    python-yaml|python-yaml|
-|    libvirt|gnu-getopt|
-|    |gsed|
+|kubectl|kubectl|
+|govc|govc|
+|jq|jq|
+||gnu-getopt|
+||gsed|
 
 ## Create the masterkube
 
