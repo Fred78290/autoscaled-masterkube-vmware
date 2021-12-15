@@ -171,6 +171,7 @@ Options are:
 --trace | -x                                   # Trace execution
 --resume | -r                                  # Allow to resume interrupted creation of cluster kubernetes
 --govc-defs                                    # Override the GOVC definitions, default ${GOVCDEFS}
+--create-image-only                            # Create image only
 
 ### Design the kubernetes cluster
 
@@ -241,7 +242,7 @@ else
     fi
 fi
 
-TEMP=$(getopt -o xvheucrk:n:p:s:t: --long no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
+TEMP=$(getopt -o xvheucrk:n:p:s:t: --long create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 
 eval set -- "$TEMP"
 
@@ -285,6 +286,10 @@ while true; do
             exit 1
         fi
         shift 2
+        ;;
+    --create-image-only)
+        CREATE_IMAGE_ONLY=YES
+        shift 1
         ;;
     --max-pods)
         MAX_PODS=$2
@@ -548,20 +553,6 @@ if [ ! -f ./etc/ssl/privkey.pem ]; then
     echo_separator
 fi
 
-# Extract the domain name from CERT
-export DOMAIN_NAME=$(openssl x509 -noout -subject -in ./etc/ssl/cert.pem | awk -F= '{print $NF}' | sed -e 's/^[ \t]*//' | sed 's/\*\.//g')
-
-# Delete previous exixting version
-if [ "$RESUME" = "NO" ]; then
-    echo_title "Launch custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
-    delete-masterkube.sh
-else
-    echo_title "Resume custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
-fi
-
-mkdir -p ./config/${NODEGROUP_NAME}
-mkdir -p ./cluster/${NODEGROUP_NAME}
-
 # If the VM template doesn't exists, build it from scrash
 if [ -z "$(govc vm.info ${TARGET_IMAGE} 2>&1)" ]; then
     echo_title "Create vmware preconfigured image ${TARGET_IMAGE}"
@@ -579,6 +570,24 @@ if [ -z "$(govc vm.info ${TARGET_IMAGE} 2>&1)" ]; then
         --primary-network="${VC_NETWORK_PUBLIC}" \
         --second-network="${VC_NETWORK_PRIVATE}"
 fi
+
+if [ ${CREATE_IMAGE_ONLY} = "YES" ]; then
+    exit 0
+fi
+
+# Extract the domain name from CERT
+export DOMAIN_NAME=$(openssl x509 -noout -subject -in ./etc/ssl/cert.pem | awk -F= '{print $NF}' | sed -e 's/^[ \t]*//' | sed 's/\*\.//g')
+
+# Delete previous exixting version
+if [ "$RESUME" = "NO" ]; then
+    echo_title "Launch custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
+    delete-masterkube.sh
+else
+    echo_title "Resume custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
+fi
+
+mkdir -p ./config/${NODEGROUP_NAME}
+mkdir -p ./cluster/${NODEGROUP_NAME}
 
 if [ "$RESUME" = "NO" ]; then
     cat ${GOVCDEFS} > ./config/${NODEGROUP_NAME}/buildenv

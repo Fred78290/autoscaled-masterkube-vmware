@@ -74,6 +74,7 @@ During the process the script will create many files located in
 | `-x\|--trace` | Trace execution  | |
 | `-r\|--resume` | Allow to resume interrupted creation of cluster kubernetes  | |
 | `--govc-defs` | Override the GOVC definitions  | bin/govc.defs |
+| `--create-image-only`| Create image only and exit ||
 | **Flag to design the kubernetes cluster** |
 | `-c\|--ha-cluster` | Allow to create an HA cluster with 3 control planes | NO |
 | `--worker-nodes` | Specify the number of worker node created in the cluster. | 3 |
