@@ -317,7 +317,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: controller
-          image: k8s.gcr.io/ingress-nginx/controller:v1.0.0
+          image: k8s.gcr.io/ingress-nginx/controller:v1.1.0
           imagePullPolicy: IfNotPresent
           lifecycle:
             preStop:

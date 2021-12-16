@@ -29,7 +29,7 @@
                 "containers": [
                     {
                         "name": "dashboard-metrics-scraper",
-                        "image": "kubernetesui/metrics-scraper:v1.0.4",
+                        "image": "kubernetesui/metrics-scraper:v1.0.7",
                         "ports": [
                             {
                                 "containerPort": 8000,
