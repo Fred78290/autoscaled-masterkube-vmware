@@ -353,23 +353,17 @@ if [ "$CNI_PLUGIN" = "calico" ]; then
 
     kubectl apply -f "https://docs.projectcalico.org/manifests/calico-vxlan.yaml" 2>&1
 
-    CNI_SELECTOR="k8s-app=calico-node"
-
 elif [ "$CNI_PLUGIN" = "flannel" ]; then
 
     echo "Install flannel network"
 
     kubectl apply -f "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml" 2>&1
 
-    CNI_SELECTOR="app=flannel"
-
 elif [ "$CNI_PLUGIN" = "weave" ]; then
 
     echo "Install weave network for K8"
 
     kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')" 2>&1
-
-    CNI_SELECTOR="name=weave-net"
 
 elif [ "$CNI_PLUGIN" = "canal" ]; then
 
@@ -378,8 +372,6 @@ elif [ "$CNI_PLUGIN" = "canal" ]; then
     kubectl apply -f "https://raw.githubusercontent.com/projectcalico/canal/master/k8s-install/1.7/rbac.yaml" 2>&1
     kubectl apply -f "https://raw.githubusercontent.com/projectcalico/canal/master/k8s-install/1.7/canal.yaml" 2>&1
 
-    CNI_SELECTOR="k8s-app=canal"
-
 elif [ "$CNI_PLUGIN" = "kube" ]; then
 
     echo "Install kube network"
@@ -387,34 +379,12 @@ elif [ "$CNI_PLUGIN" = "kube" ]; then
     kubectl apply -f "https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter.yaml" 2>&1
     kubectl apply -f "https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter-all-features.yaml" 2>&1
 
-    CNI_SELECTOR="k8s-app=kube-router"
-
 elif [ "$CNI_PLUGIN" = "romana" ]; then
 
     echo "Install romana network"
 
     kubectl apply -f https://raw.githubusercontent.com/romana/romana/master/containerize/specs/romana-kubeadm.yml 2>&1
 
-    CNI_SELECTOR="romana-app=etcd"
-
-fi
-
-# Wait CNI ready, then reload coredns
-if [ ! -z ${CNI_SELECTOR} ]; then
-    echo -n "Wait for CNI $CNI_PLUGIN availability"
-    while [ -z "$(kubectl get po -n kube-system 2>/dev/null | grep $CNI_PLUGIN)" ];
-    do
-        sleep 1
-        echo -n "."
-    done
-
-    kubectl wait --namespace kube-system --for=condition=ready pod --selector=${CNI_SELECTOR} --timeout=60s 2>/dev/null || echo "continue...."
-
-    # Force coredns to reload
-    kubectl rollout restart -n kube-system deployment/coredns
-
-    # Wait coredns ready
-    kubectl wait --namespace kube-system --for=condition=ready pod --selector=k8s-app=kube-dns --timeout=60s 2>/dev/null || echo "continue...."
 fi
 
 kubectl label nodes ${HOSTNAME} "cluster.autoscaler.nodegroup/name=${NODEGROUP_NAME}" \
