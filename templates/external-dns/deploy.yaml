@@ -75,8 +75,8 @@ spec:
             - --domain-filter=__DOMAIN_NAME__
             - --annotation-filter=external-dns.alpha.kubernetes.io/register=true
             - --ignore-ingress-tls-spec
-            - --txt-prefix=vmware.
-            - --txt-owner-id=vmware
+            - --txt-prefix=__NODEGROUP_NAME__.
+            - --txt-owner-id=__NODEGROUP_NAME__
             - --provider=godaddy
             - --godaddy-api-key=__GODADDY_API_KEY__
             - --godaddy-api-secret=__GODADDY_API_SECRET__
