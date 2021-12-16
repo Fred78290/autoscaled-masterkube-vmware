@@ -8,7 +8,6 @@ CNI_PLUGIN=flannel
 NET_IF=$(ip route get 1|awk '{print $5;exit}')
 KUBERNETES_VERSION=v1.21.0
 CLUSTER_DIR=/etc/cluster
-PROVIDERID="${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}"
 KUBEADM_CONFIG=/etc/kubernetes/kubeadm-config.yaml
 HA_CLUSTER=false
 CONTROL_PLANE_ENDPOINT=
@@ -37,7 +36,7 @@ else
 	ARCH="amd64"
 fi
 
-TEMP=$(getopt -o xm:g:r:i:c:n:k: --long max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,provider-id:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
+TEMP=$(getopt -o xm:g:r:i:c:n:k: --long allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -54,6 +53,10 @@ while true; do
         ;;
     -g|--node-group)
         NODEGROUP_NAME="$2"
+        shift 2
+        ;;
+    --allow-deployment)
+        MASTER_NODE_ALLOW_DEPLOYMENT=$2
         shift 2
         ;;
     -r|--container-runtime)
@@ -110,10 +113,6 @@ while true; do
         ;;
     --net-if)
         NET_IF=$2
-        shift 2
-        ;;
-    --provider-id)
-        PROVIDERID=$2
         shift 2
         ;;
     --cert-extra-sans)
@@ -211,7 +210,7 @@ nodeRegistration:
     network-plugin: cni
     container-runtime: ${CONTAINER_RUNTIME}
     container-runtime-endpoint: ${CONTAINER_CTL}
-    provider-id: ${PROVIDERID}
+    provider-id: ${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}
 ---
 kind: KubeletConfiguration
 apiVersion: kubelet.config.k8s.io/v1beta1
@@ -308,7 +307,7 @@ EOF
   done
 fi
 
-echo "Init K8 cluster with options:$K8_OPTIONS, PROVIDERID=${PROVIDERID}"
+echo "Init K8 cluster with options:$K8_OPTIONS"
 
 cat ${KUBEADM_CONFIG}
 
@@ -397,6 +396,10 @@ kubectl annotate node ${HOSTNAME} \
     "cluster.autoscaler.nodegroup/autoprovision=false" \
     "cluster-autoscaler.kubernetes.io/scale-down-disabled=true" \
     --overwrite
+
+if [ ${MASTER_NODE_ALLOW_DEPLOYMENT} = "YES" ];then
+  kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
+fi
 
 sed -i -e "/${CONTROL_PLANE_ENDPOINT%%.}/d" /etc/hosts
 

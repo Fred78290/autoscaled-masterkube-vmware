@@ -12,7 +12,7 @@ HA_CLUSTER=
 EXTERNAL_ETCD=NO
 NODEINDEX=0
 
-TEMP=$(getopt -o i:g:c:n:p: --long node-index:,use-external-etcd:,ha-cluster:,node-group:,cluster-nodes:,control-plane-endpoint:,provider-id:, -n "$0" -- "$@")
+TEMP=$(getopt -o i:g:c:n: --long allow-deployment:,node-index:,use-external-etcd:,ha-cluster:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -36,16 +36,16 @@ while true; do
         CLUSTER_NODES="$2"
         shift 2
         ;;
-    -p|--provider-id)
-        PROVIDERID=$2
-        shift 2
-        ;;
     -h | --ha-cluster)
         HA_CLUSTER=$2
         shift 2
         ;;
     --use-external-etcd)
         EXTERNAL_ETCD=$2
+        shift 2
+        ;;
+    --allow-deployment)
+        MASTER_NODE_ALLOW_DEPLOYMENT=$2 
         shift 2
         ;;
     --)
@@ -117,7 +117,7 @@ export KUBECONFIG=/etc/kubernetes/admin.conf
 
 cat > patch.yaml <<EOF
 spec:
-    providerID: '${PROVIDERID}'
+    providerID: '${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}'
 EOF
 
 kubectl patch node ${HOSTNAME} --patch-file patch.yaml
@@ -125,8 +125,13 @@ kubectl patch node ${HOSTNAME} --patch-file patch.yaml
 if [ "$HA_CLUSTER" = "true" ]; then
     kubectl label nodes ${HOSTNAME} \
         "cluster.autoscaler.nodegroup/name=${NODEGROUP_NAME}" \
+        "node-role.kubernetes.io/master=${ANNOTE_MASTER}" \
         "master=true" \
         --overwrite
+
+    if [ ${MASTER_NODE_ALLOW_DEPLOYMENT} = "YES" ];then
+        kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
+    fi
 else
     kubectl label nodes ${HOSTNAME} \
         "cluster.autoscaler.nodegroup/name=${NODEGROUP_NAME}" \

@@ -13,7 +13,6 @@ CURDIR=$(dirname $0)
 export SCHEME="vmware"
 export NODEGROUP_NAME="vmware-ca-k8s"
 export MASTERKUBE="${NODEGROUP_NAME}-masterkube"
-export PROVIDERID="${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${MASTERKUBE}"
 export SSH_PRIVATE_KEY="$HOME/.ssh/id_rsa"
 export SSH_PUBLIC_KEY="${SSH_PRIVATE_KEY}.pub"
 export KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
@@ -311,7 +310,6 @@ while true; do
     --node-group)
         NODEGROUP_NAME="$2"
         MASTERKUBE="${NODEGROUP_NAME}-masterkube"
-        PROVIDERID="${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${MASTERKUBE}"
         shift 2
         ;;
 
@@ -596,7 +594,6 @@ export PUBLIC_IP="$PUBLIC_IP"
 export SCHEME="$SCHEME"
 export NODEGROUP_NAME="$NODEGROUP_NAME"
 export MASTERKUBE="$MASTERKUBE"
-export PROVIDERID="$PROVIDERID"
 export SSH_PRIVATE_KEY=$SSH_PRIVATE_KEY
 export SSH_PUBLIC_KEY=$SSH_PUBLIC_KEY
 export SSH_KEY="$SSH_KEY"
@@ -945,7 +942,6 @@ do
     if [ -f ./config/${NODEGROUP_NAME}/kubeadm-0${INDEX}-prepared ]; then
         echo_title "Already prepared VM $MASTERKUBE_NODE"
     else
-        PROVIDERID="${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${MASTERKUBE_NODE}"
         IPADDR="${IPADDRS[$INDEX]}"
 
         echo_title "Prepare VM ${MASTERKUBE_NODE} with IP:${IPADDR}"
@@ -962,10 +958,11 @@ do
                     --control-plane-endpoint=${MASTERKUBE}.${DOMAIN_NAME} \
                     --listen-ip=$NET_IP $SILENT
             else
-                echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} single instance master node, kubernetes version=${KUBERNETES_VERSION}, providerID=${PROVIDERID}"
+                echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} single instance master node, kubernetes version=${KUBERNETES_VERSION}"
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
                     --max-pods=${MAX_PODS} \
+                    --allow-deployment=${MASTER_NODE_ALLOW_DEPLOYMENT} \
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
                     --container-runtime=${CONTAINER_ENGINE} \
                     --cert-extra-sans="${MASTERKUBE}.${DOMAIN_NAME}" \
@@ -973,8 +970,7 @@ do
                     --node-index=${NODEINDEX} \
                     --cni=${CNI_PLUGIN} \
                     --net-if=$NET_IF \
-                    --kubernetes-version="${KUBERNETES_VERSION}" \
-                    --provider-id="'${PROVIDERID}'" $SILENT
+                    --kubernetes-version="${KUBERNETES_VERSION}" $SILENT
 
                 eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ./cluster/${NODEGROUP_NAME} $SILENT
             fi
@@ -986,10 +982,11 @@ do
             fi
 
             if [ $NODEINDEX = 0 ]; then
-                echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} instance master node number ${INDEX}, kubernetes version=${KUBERNETES_VERSION}, providerID=${PROVIDERID}"
+                echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} instance master node number ${INDEX}, kubernetes version=${KUBERNETES_VERSION}"
 
                 ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
                     --max-pods=${MAX_PODS} \
+                    --allow-deployment=${MASTER_NODE_ALLOW_DEPLOYMENT} \
                     --container-runtime=${CONTAINER_ENGINE} \
                     --use-external-etcd=${EXTERNAL_ETCD} \
                     --node-group=${NODEGROUP_NAME} \
@@ -1000,8 +997,7 @@ do
                     --ha-cluster=true \
                     --cni=${CNI_PLUGIN} \
                     --net-if=$NET_IF \
-                    --kubernetes-version="${KUBERNETES_VERSION}" \
-                    --provider-id="'${PROVIDERID}'" $SILENT
+                    --kubernetes-version="${KUBERNETES_VERSION}" $SILENT
 
                 eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ./cluster/${NODEGROUP_NAME} $SILENT
 
@@ -1017,7 +1013,7 @@ do
 
                 echo -n ${IPADDRS[0]}:6443 > ./cluster/${NODEGROUP_NAME}/manager-ip
             elif [[ $INDEX > $CONTROLNODES ]] || [ "$HA_CLUSTER" = "false" ]; then
-                    echo_blue_bold "Join node ${MASTERKUBE_NODE} instance worker node, kubernetes version=${KUBERNETES_VERSION}, providerID=${PROVIDERID}"
+                    echo_blue_bold "Join node ${MASTERKUBE_NODE} instance worker node, kubernetes version=${KUBERNETES_VERSION}"
 
                     eval scp ${SCP_OPTIONS} ./cluster/${NODEGROUP_NAME}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
@@ -1026,21 +1022,20 @@ do
                         --node-group=${NODEGROUP_NAME} \
                         --node-index=${NODEINDEX} \
                         --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
-                        --cluster-nodes="${CLUSTER_NODES}" \
-                        --provider-id="'${PROVIDERID}'" $SILENT
+                        --cluster-nodes="${CLUSTER_NODES}" $SILENT
             else
-                echo_blue_bold "Join node ${MASTERKUBE_NODE} instance master node, kubernetes version=${KUBERNETES_VERSION}, providerID=${PROVIDERID}"
+                echo_blue_bold "Join node ${MASTERKUBE_NODE} instance master node, kubernetes version=${KUBERNETES_VERSION}"
 
                 eval scp ${SCP_OPTIONS} ./cluster/${NODEGROUP_NAME}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
+                    --allow-deployment=${MASTER_NODE_ALLOW_DEPLOYMENT} \
                     --use-external-etcd=${EXTERNAL_ETCD} \
                     --node-group=${NODEGROUP_NAME} \
                     --node-index=${NODEINDEX} \
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
                     --cluster-nodes="${CLUSTER_NODES}" \
-                    --ha-cluster=true \
-                    --provider-id="'${PROVIDERID}'" $SILENT
+                    --ha-cluster=true $SILENT
             fi
         fi
 
