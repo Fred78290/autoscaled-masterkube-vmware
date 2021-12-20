@@ -11,6 +11,7 @@ CLUSTER_NODES=
 HA_CLUSTER=
 EXTERNAL_ETCD=NO
 NODEINDEX=0
+MASTER_NODE_ALLOW_DEPLOYMENT=NO
 
 TEMP=$(getopt -o i:g:c:n: --long allow-deployment:,node-index:,use-external-etcd:,ha-cluster:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
@@ -129,7 +130,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
         "master=true" \
         --overwrite
 
-    if [ ${MASTER_NODE_ALLOW_DEPLOYMENT} = "YES" ];then
+    if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
         kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
     fi
 else

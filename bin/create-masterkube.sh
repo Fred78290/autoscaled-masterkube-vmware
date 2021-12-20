@@ -569,7 +569,7 @@ if [ -z "$(govc vm.info ${TARGET_IMAGE} 2>&1)" ]; then
         --second-network="${VC_NETWORK_PRIVATE}"
 fi
 
-if [ ${CREATE_IMAGE_ONLY} = "YES" ]; then
+if [ "${CREATE_IMAGE_ONLY}" = "YES" ]; then
     exit 0
 fi
 
