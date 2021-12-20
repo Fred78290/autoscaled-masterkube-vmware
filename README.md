@@ -48,7 +48,9 @@ Some needed file are located in:
 | `etc/ssl`  | Your CERT for https. Autosigned will be generated if empty  |
 | `template`  | Templates files to deploy pod & service |
 
-The first thing done by this script is to create a VM Template Ubuntu-20.04 image with kubernetes and a container runtime installed. The VM template will be named by default focal-kubernetes-(kuberneres version)
+The first thing done by this script is to create a VM Template Ubuntu-20.04 image containing kubernetes binaries and a container runtime of you choice (docker/containerd/cri-o) with cni plugin (calico/flannel/weave/...). The VM template will be named by default focal-kubernetes-cni-(cni plugin)-(kuberneres version)-(container runtime)-(architecture)
+
+as example: focal-kubernetes-cni-flannel-v1.23.1-containerd-amd64
 
 Next step will be to launch a cloned VM and create a master node. It will also deploy a dashboard at the URL https://masterkube-vmware-dashboard.@your-domain@/
 
@@ -60,8 +62,8 @@ During the process the script will create many files located in
 
 | Name | Description |
 | --- | --- |
-| `cluster` | Essentials file to connect to kubernetes with kubeadm join  |
-| `config`  | Configuration file generated during the build process  |
+| `cluster/vmware-ca-k8s` | Essentials file to connect to kubernetes with kubeadm join  |
+| `config/vmware-ca-k8s`  | Configuration file generated during the build process  |
 
 **The cluster kubernetes will use metallb as load balancer for services declared LoadBalancer.**
 
@@ -85,7 +87,7 @@ During the process the script will create many files located in
 | `-t\|--transport`  | Override the transport to be used between autoscaler and vmware-autoscaler [**tcp**\|**linux**] |linux|
 | `--node-group`  | Override the node group name |vmware-ca-k8s|
 | `--cni-plugin`  | Override CNI plugin [**calico**\|**flannel**\|**weave**\|**romana**]|flannel|
-| `-n\|--cni-version`  | Override CNI plugin version |v1.0.4|
+| `-n\|--cni-version`  | Override CNI plugin version |v1.0.1|
 | `-k\|--kubernetes-version`  |Which version of kubernetes to use |latest|
 | **Flags in ha mode only** |
 | `-e\|--create-external-etcd` | Allow to create and use an external HA etcd cluster  | NO |
@@ -97,7 +99,7 @@ During the process the script will create many files located in
 | `-p\|--password`  |Define the kubernetes user password |randomized|
 | **Flags to set the template vm** |
 | `--public-address` | The public address to expose kubernetes endpoint [**DHCP**\|**1.2.3.4**] | DHCP |
-| `--no-dhcp-autoscaled-node` |Autoscaled node don't use DHCP | DHCP |
+| `--no-dhcp-autoscaled-node` | Autoscaled node don't use DHCP | DHCP |
 | `--vm-private-network` | Override the name of the private network in vsphere | 'Private Network' |
 | `--vm-public-network` | Override the name of the public network in vsphere | 'Public Network' |
 | `--net-address` | Override the IP of the kubernetes control plane node | 192.168.1.20 |
