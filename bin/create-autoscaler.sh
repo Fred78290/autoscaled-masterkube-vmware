@@ -12,6 +12,28 @@ CACERT=$(cat ./cluster/${NODEGROUP_NAME}/ca.cert)
 export K8NAMESPACE=kube-system
 export ETC_DIR=./config/${NODEGROUP_NAME}/deployment/autoscaler
 export KUBERNETES_TEMPLATE=./templates/autoscaler
+export KUBERNETES_MINOR_RELEASE=$(echo -n $KUBERNETES_VERSION | tr '.' ' ' | awk '{ print $2 }')
+export CLUSTER_AUTOSCALER_VERSION=v1.22.1
+export AWS_AUTOSCALER_VERSION=v1.22.5
+
+case $KUBERNETES_MINOR_RELEASE in
+    20)
+        CLUSTER_AUTOSCALER_VERSION=v1.20.5
+        AWS_AUTOSCALER_VERSION=v1.20.14
+        ;;
+    21)
+        CLUSTER_AUTOSCALER_VERSION=v1.21.8
+        AWS_AUTOSCALER_VERSION=v1.21.8
+        ;;
+    22)
+        CLUSTER_AUTOSCALER_VERSION=v1.22.5
+        AWS_AUTOSCALER_VERSION=v1.22.5
+        ;;
+    23)
+        CLUSTER_AUTOSCALER_VERSION=v1.22.5
+        AWS_AUTOSCALER_VERSION=v1.23.1
+        ;;
+esac
 
 mkdir -p $ETC_DIR
 
