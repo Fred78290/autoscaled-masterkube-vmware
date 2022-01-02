@@ -93,6 +93,10 @@
                             {
                                 "name": "etcd-ssl",
                                 "mountPath": "/etc/etcd/ssl"
+                            },
+                            {
+                                "name": "kubernetes-pki",
+                                "mountPath": "/etc/kubernetes/pki"
                             }
                         ]
                     },
@@ -178,6 +182,12 @@
                         "secret": {
                             "secretName": "etcd-ssl",
                             "defaultMode": 384
+                        }
+                    },
+                    {
+                        "name": "kubernetes-pki",
+                        "configMap": {
+                            "name": "kubernetes-pki"
                         }
                     }
                 ]

@@ -328,20 +328,19 @@ cp /etc/kubernetes/admin.conf $CLUSTER_DIR/config
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
-if [ "$HA_CLUSTER" = "true" ]; then
+mkdir -p $CLUSTER_DIR/kubernetes/pki
+
+cp /etc/kubernetes/pki/ca.crt $CLUSTER_DIR/kubernetes/pki
+cp /etc/kubernetes/pki/ca.key $CLUSTER_DIR/kubernetes/pki
+cp /etc/kubernetes/pki/sa.key $CLUSTER_DIR/kubernetes/pki
+cp /etc/kubernetes/pki/sa.pub $CLUSTER_DIR/kubernetes/pki
+cp /etc/kubernetes/pki/front-proxy-ca.crt $CLUSTER_DIR/kubernetes/pki
+cp /etc/kubernetes/pki/front-proxy-ca.key $CLUSTER_DIR/kubernetes/pki
+
+if [ "$EXTERNAL_ETCD" != "true" ]; then
     mkdir -p $CLUSTER_DIR/kubernetes/pki/etcd
-
-    cp /etc/kubernetes/pki/ca.crt $CLUSTER_DIR/kubernetes/pki
-    cp /etc/kubernetes/pki/ca.key $CLUSTER_DIR/kubernetes/pki
-    cp /etc/kubernetes/pki/sa.key $CLUSTER_DIR/kubernetes/pki
-    cp /etc/kubernetes/pki/sa.pub $CLUSTER_DIR/kubernetes/pki
-    cp /etc/kubernetes/pki/front-proxy-ca.crt $CLUSTER_DIR/kubernetes/pki
-    cp /etc/kubernetes/pki/front-proxy-ca.key $CLUSTER_DIR/kubernetes/pki
-
-    if [ "$EXTERNAL_ETCD" != "true" ]; then
-        cp /etc/kubernetes/pki/etcd/ca.crt $CLUSTER_DIR/kubernetes/pki/etcd/ca.crt
-        cp /etc/kubernetes/pki/etcd/ca.key $CLUSTER_DIR/kubernetes/pki/etcd/ca.key
-    fi
+    cp /etc/kubernetes/pki/etcd/ca.crt $CLUSTER_DIR/kubernetes/pki/etcd/ca.crt
+    cp /etc/kubernetes/pki/etcd/ca.key $CLUSTER_DIR/kubernetes/pki/etcd/ca.key
 fi
 
 chmod -R uog+r $CLUSTER_DIR/*

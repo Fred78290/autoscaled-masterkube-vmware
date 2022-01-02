@@ -1071,15 +1071,19 @@ fi
 # For vmware autoscaler
 if [ "$EXTERNAL_ETCD" = "true" ]; then
     export EXTERNAL_ETCD_ARGS="--use-external-etcd"
+    ETCD_DST_DIR="/etc/etcd/ssl"
 else
     export EXTERNAL_ETCD_ARGS="--no-use-external-etcd"
+    ETCD_DST_DIR="/etc/kubernetes/pki/etcd"
 fi
 
 AUTOSCALER_CONFIG=$(cat <<EOF
 {
     "use-external-etcd": $EXTERNAL_ETCD,
     "src-etcd-ssl-dir": "/etc/etcd/ssl",
-    "dst-etcd-ssl-dir": "/etc/etcd/ssl",
+    "dst-etcd-ssl-dir": "${ETCD_DST_DIR}",
+    "kubernetes-pki-srcdir": "/etc/kubernetes/pki",
+    "kubernetes-pki-dstdir": "/etc/kubernetes/pki",
     "network": "${TRANSPORT}",
     "listen": "${LISTEN}",
     "secret": "${SCHEME}",
@@ -1087,6 +1091,8 @@ AUTOSCALER_CONFIG=$(cat <<EOF
     "maxNode": ${MAXNODES},
     "maxNode-per-cycle": 2,
     "node-name-prefix": "autoscaled",
+    "managed-name-prefix": "managed",
+    "controlplane-name-prefix": "master",
     "nodePrice": 0.0,
     "podPrice": 0.0,
     "image": "${TARGET_IMAGE}",
@@ -1201,11 +1207,15 @@ kubectl create configmap masterkube-config --kubeconfig=./cluster/${NODEGROUP_NA
     --from-file ./cluster/${NODEGROUP_NAME}/dashboard-token \
     --from-file ./cluster/${NODEGROUP_NAME}/token
 
+kubectl create configmap kubernetes-pki --kubeconfig=./cluster/${NODEGROUP_NAME}/config -n kube-system \
+	--from-file ./cluster/${NODEGROUP_NAME}/kubernetes/pki
+
 if [ "$EXTERNAL_ETCD" = "true" ]; then
     kubectl create secret generic etcd-ssl --kubeconfig=./cluster/${NODEGROUP_NAME}/config -n kube-system \
         --from-file ./cluster/${NODEGROUP_NAME}/etcd/ssl
 else
-    kubectl create secret generic etcd-ssl --kubeconfig=./cluster/${NODEGROUP_NAME}/config -n kube-system
+    kubectl create secret generic etcd-ssl --kubeconfig=./cluster/${NODEGROUP_NAME}/config -n kube-system \
+        --from-file ./cluster/${NODEGROUP_NAME}/kubernetes/pki/etcd
 fi
 
 popd
