@@ -1156,6 +1156,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
                 },
                 "interfaces": [
                     {
+                        "primary": false,
                         "exists": true,
                         "network": "${VC_NETWORK_PUBLIC}",
                         "adapter": "vmxnet3",
@@ -1164,6 +1165,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
                         "dhcp": true
                     },
                     {
+                        "primary": true,
                         "exists": true,
                         "network": "${VC_NETWORK_PRIVATE}",
                         "adapter": "vmxnet3",
