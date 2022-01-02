@@ -12,8 +12,9 @@ HA_CLUSTER=
 EXTERNAL_ETCD=NO
 NODEINDEX=0
 MASTER_NODE_ALLOW_DEPLOYMENT=NO
+NET_IF=$(ip route get 1|awk '{print $5;exit}')
 
-TEMP=$(getopt -o i:g:c:n: --long allow-deployment:,node-index:,use-external-etcd:,ha-cluster:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+TEMP=$(getopt -o i:g:c:n: --long net-if:,allow-deployment:,node-index:,use-external-etcd:,ha-cluster:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -49,6 +50,10 @@ while true; do
         MASTER_NODE_ALLOW_DEPLOYMENT=$2 
         shift 2
         ;;
+    --net-if)
+        NET_IF=$2
+        shift 2
+        ;;
     --)
         shift
         break
@@ -60,6 +65,10 @@ while true; do
         ;;
     esac
 done
+
+ifconfig $NET_IF &> /dev/null || NET_IF=$(ip route get 1|awk '{print $5;exit}')
+APISERVER_ADVERTISE_ADDRESS=$(ip addr show $NET_IF | grep "inet\s" | tr '/' ' ' | awk '{print $2}')
+APISERVER_ADVERTISE_ADDRESS=$(echo $APISERVER_ADVERTISE_ADDRESS | awk '{print $1}')
 
 sed -i "/$CONTROL_PLANE_ENDPOINT_HOST/d" /etc/hosts
 echo "$CONTROL_PLANE_ENDPOINT_ADDR   $CONTROL_PLANE_ENDPOINT_HOST" >> /etc/hosts
@@ -107,11 +116,13 @@ if [ "$HA_CLUSTER" = "true" ]; then
     kubeadm join ${MASTER_IP} \
         --token "${TOKEN}" \
         --discovery-token-ca-cert-hash "sha256:${CACERT}" \
+        --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS} \
         --control-plane
 else
     kubeadm join ${MASTER_IP} \
         --token "${TOKEN}" \
-        --discovery-token-ca-cert-hash "sha256:${CACERT}"
+        --discovery-token-ca-cert-hash "sha256:${CACERT}" \
+        --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS}
 fi
 
 export KUBECONFIG=/etc/kubernetes/admin.conf

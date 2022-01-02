@@ -1022,6 +1022,7 @@ do
                         --node-group=${NODEGROUP_NAME} \
                         --node-index=${NODEINDEX} \
                         --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
+                        --net-if=$NET_IF \
                         --cluster-nodes="${CLUSTER_NODES}" $SILENT
             else
                 echo_blue_bold "Join node ${MASTERKUBE_NODE} instance master node, kubernetes version=${KUBERNETES_VERSION}"
@@ -1035,6 +1036,7 @@ do
                     --node-index=${NODEINDEX} \
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
                     --cluster-nodes="${CLUSTER_NODES}" \
+                    --net-if=$NET_IF \
                     --ha-cluster=true $SILENT
             fi
         fi
