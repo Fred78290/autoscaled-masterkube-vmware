@@ -396,7 +396,7 @@ kubectl annotate node ${HOSTNAME} \
     "cluster-autoscaler.kubernetes.io/scale-down-disabled=true" \
     --overwrite
 
-if [ ${MASTER_NODE_ALLOW_DEPLOYMENT} = "YES" ];then
+if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
   kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
 fi
 
