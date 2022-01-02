@@ -1120,6 +1120,9 @@ AUTOSCALER_CONFIG=$(cat <<EOF
         "package_update": false,
         "package_upgrade": false,
         "runcmd": [
+            "echo 1 > /sys/block/sda/device/rescan",
+            "growpart /dev/sda 1",
+            "resize2fs /dev/sda1",
             "echo '${IPADDRS[0]} ${MASTERKUBE} ${MASTERKUBE}.${DOMAIN_NAME}' >> /etc/hosts"
         ]
     },
