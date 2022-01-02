@@ -829,6 +829,17 @@ do
     create_vm $INDEX $PUBLIC_NODE_IP $NODE_IP &
 
     IPADDRS+=($NODE_IP)
+
+        # Reserve 2 ip for potentiel HA cluster
+    if [[ "$HA_CLUSTER" == "false" ]] && [[ $INDEX = 0 ]]; then
+        NODE_IP=$(nextip $NODE_IP)
+        NODE_IP=$(nextip $NODE_IP)
+        if [ "$PUBLIC_IP" != "DHCP" ]; then
+            PUBLIC_NODE_IP=$(nextip $PUBLIC_NODE_IP)
+            PUBLIC_NODE_IP=$(nextip $PUBLIC_NODE_IP)
+        fi
+    fi
+
     NODE_IP=$(nextip $NODE_IP)
 
     if [ "$PUBLIC_IP" != "DHCP" ]; then
@@ -922,7 +933,9 @@ if [ "$HA_CLUSTER" = "true" ]; then
     fi
 else
     IPADDR="${IPADDRS[0]}"
-    CLUSTER_NODES="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDR}"
+    IPRESERVED1=$(nextip $IPADDR)
+    IPRESERVED2=$(nextip $IPRESERVED1)
+    CLUSTER_NODES="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDR},${NODEGROUP_NAME}-master-02.${DOMAIN_NAME}:${IPRESERVED1},${NODEGROUP_NAME}-master-03.${DOMAIN_NAME}:${IPRESERVED2}"
 
     echo "export CLUSTER_NODES=$CLUSTER_NODES" >> ./config/${NODEGROUP_NAME}/buildenv
 fi
@@ -966,6 +979,7 @@ do
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
                     --container-runtime=${CONTAINER_ENGINE} \
                     --cert-extra-sans="${MASTERKUBE}.${DOMAIN_NAME}" \
+                    --cluster-nodes="${CLUSTER_NODES}" \
                     --node-group=${NODEGROUP_NAME} \
                     --node-index=${NODEINDEX} \
                     --cni=${CNI_PLUGIN} \
