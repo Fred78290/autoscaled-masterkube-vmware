@@ -55,7 +55,7 @@
                 ],
                 "containers": [
                     {
-                        "image": "$REGISTRY/vsphere-autoscaler:$AWS_AUTOSCALER_VERSION",
+                        "image": "$REGISTRY/vsphere-autoscaler:$VSPHERE_AUTOSCALER_VERSION",
                         "name": "vsphere-autoscaler",
                         "resources": {
                             "limits": {
