@@ -216,6 +216,37 @@
                 "update",
                 "watch"
             ]
+        },
+        {
+            "apiGroups": [
+                "nodemanager.aldunelabs.com"
+            ],
+            "resources": [
+                "*"
+            ],
+            "verbs": [
+                "list",
+                "get",
+                "update",
+                "watch",
+                "delete"
+            ]
+        },
+        {
+            "apiGroups": [
+                "apiextensions.k8s.io"
+            ],
+            "resources": [
+                "customresourcedefinitions"
+            ],
+            "verbs": [
+                "list",
+                "get",
+                "update",
+                "watch",
+                "delete",
+                "create"
+            ]
         }
     ]
 }
