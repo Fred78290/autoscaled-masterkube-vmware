@@ -84,7 +84,8 @@
                 "list",
                 "get",
                 "update",
-                "delete"
+                "delete",
+                "patch"
             ]
         },
         {
@@ -229,7 +230,8 @@
                 "get",
                 "update",
                 "watch",
-                "delete"
+                "delete",
+                "patch"
             ]
         },
         {

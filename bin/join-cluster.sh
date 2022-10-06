@@ -8,13 +8,17 @@ CONTROL_PLANE_ENDPOINT=
 CONTROL_PLANE_ENDPOINT_HOST=
 CONTROL_PLANE_ENDPOINT_ADDR=
 CLUSTER_NODES=
-HA_CLUSTER=
+HA_CLUSTER=false
 EXTERNAL_ETCD=NO
 NODEINDEX=0
 MASTER_NODE_ALLOW_DEPLOYMENT=NO
 NET_IF=$(ip route get 1|awk '{print $5;exit}')
 
-TEMP=$(getopt -o i:g:c:n: --long net-if:,allow-deployment:,node-index:,use-external-etcd:,ha-cluster:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+MASTER_IP=$(cat ./cluster/manager-ip)
+TOKEN=$(cat ./cluster/token)
+CACERT=$(cat ./cluster/ca.cert)
+
+TEMP=$(getopt -o i:g:c:n: --long net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -38,12 +42,16 @@ while true; do
         CLUSTER_NODES="$2"
         shift 2
         ;;
-    -h | --ha-cluster)
+    --control-plane)
         HA_CLUSTER=$2
         shift 2
         ;;
     --use-external-etcd)
         EXTERNAL_ETCD=$2
+        shift 2
+        ;;
+    --join-master)
+        MASTER_IP=$2
         shift 2
         ;;
     --allow-deployment)
@@ -82,10 +90,6 @@ done
 
 mkdir -p /etc/kubernetes/pki/etcd
 
-MASTER_IP=$(cat ./cluster/manager-ip)
-TOKEN=$(cat ./cluster/token)
-CACERT=$(cat ./cluster/ca.cert)
-
 cp cluster/config /etc/kubernetes/admin.conf
 
 if [ "$HA_CLUSTER" = "true" ]; then
@@ -114,12 +118,14 @@ if [ "$HA_CLUSTER" = "true" ]; then
     fi
 
     kubeadm join ${MASTER_IP} \
+        --node-name "${HOSTNAME}" \
         --token "${TOKEN}" \
         --discovery-token-ca-cert-hash "sha256:${CACERT}" \
         --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS} \
         --control-plane
 else
     kubeadm join ${MASTER_IP} \
+        --node-name "${HOSTNAME}" \
         --token "${TOKEN}" \
         --discovery-token-ca-cert-hash "sha256:${CACERT}" \
         --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS}

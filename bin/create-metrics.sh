@@ -4,12 +4,12 @@ CURDIR=$(dirname $0)
 pushd $CURDIR/../
 
 export K8NAMESPACE=kube-system
-export ETC_DIR=./config/${NODEGROUP_NAME}/deployment/metrics-server
+export ETC_DIR=${TARGET_DEPLOY_LOCATION}/metrics-server
 export KUBERNETES_TEMPLATE=./templates/metrics-server
 
 if [ -z "$DOMAIN_NAME" ]; then
-    export DOMAIN_NAME=$(openssl x509 -noout -fingerprint -text < ./etc/ssl/cert.pem | grep 'Subject: CN =' | awk '{print $4}' | sed 's/\*\.//g')
-    echo "domain:$DOMAIN_NAME"
+    export DOMAIN_NAME=$(openssl x509 -noout -fingerprint -text < ${SSL_LOCATION}/cert.pem | grep 'Subject: CN =' | awk '{print $4}' | sed 's/\*\.//g')
+echo "domain:$DOMAIN_NAME"
 fi
 
 mkdir -p $ETC_DIR
@@ -21,7 +21,7 @@ echo $(eval "cat <<EOF
 $(<$KUBERNETES_TEMPLATE/$1.json)
 EOF") | jq . > $ETC_DIR/$1.json
 
-kubectl apply -f $ETC_DIR/$1.json --kubeconfig=./cluster/${NODEGROUP_NAME}/config
+kubectl apply -f $ETC_DIR/$1.json --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 }
 
 deploy clusterrole

@@ -13,7 +13,7 @@
 # The second VM will contains everything to run kubernetes
 
 KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
-CNI_PLUGIN_VERSION=v1.0.1
+CNI_PLUGIN_VERSION=v1.1.1
 SSH_KEY=$(cat ~/.ssh/id_rsa.pub)
 CACHE=~/.local/vmware/cache
 TARGET_IMAGE=focal-kubernetes-$KUBERNETES_VERSION
@@ -24,7 +24,7 @@ IMPORTMODE="govc"
 CURDIR=$(dirname $0)
 USER=ubuntu
 PRIMARY_NETWORK_ADAPTER=vmxnet3
-PRIMARY_NETWORK_NAME=$GOVC_NETWORK
+PRIMARY_NETWORK_NAME="$GOVC_NETWORK"
 SECOND_NETWORK_ADAPTER=vmxnet3
 SECOND_NETWORK_NAME=
 SEED_ARCH=$([ "$(uname -m)" == "aarch64" ] && echo -n arm64 || echo -n amd64)
@@ -249,7 +249,7 @@ cat > "${ISODIR}/meta-data" <<EOF
 }
 EOF
 
-cat > "${CACHE}/prepare-image.sh" << EOF
+cat > "${ISODIR}/prepare-image.sh" << EOF
 #!/bin/bash
 SEED_ARCH=${SEED_ARCH}
 CNI_PLUGIN=${CNI_PLUGIN}
@@ -272,14 +272,14 @@ apt update
 echo "==============================================================================================================================="
 echo "= Install mandatories packages"
 echo "==============================================================================================================================="
-apt install jq socat conntrack awscli net-tools traceroute -y
+apt install jq socat conntrack net-tools traceroute nfs-common unzip -y
 echo
 
 EOF
 
 cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
 function pull_image() {
-    DOCKER_IMAGES=$(curl -s $1 | grep "image: " | sed -E 's/.+image: (.+)/\1/g')
+    DOCKER_IMAGES=$(curl -s $1 | grep -E "\simage: " | sed -E 's/.+image: (.+)/\1/g')
     
     for DOCKER_IMAGE in $DOCKER_IMAGES
     do
@@ -361,9 +361,7 @@ elif [ "${CONTAINER_ENGINE}" == "containerd" ]; then
     echo "Install Containerd"
     echo "==============================================================================================================================="
 
-    apt-get update
-
-    curl -sL  https://github.com/containerd/containerd/releases/download/v1.5.8/cri-containerd-cni-1.5.8-linux-amd64.tar.gz | tar -C / -xz
+    curl -sL  https://github.com/containerd/containerd/releases/download/v1.6.8/cri-containerd-cni-1.6.8-linux-${SEED_ARCH}.tar.gz | tar -C / -xz
 
     mkdir -p /etc/containerd
     containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/g' | tee /etc/containerd/config.toml
@@ -395,13 +393,11 @@ else
     systemctl restart crio
 fi
 
-if [ ! -f /usr/local/bin/crictl ]; then
-    echo "==============================================================================================================================="
-    echo "= Install crictl"
-    echo "==============================================================================================================================="
-    curl -sL https://github.com/kubernetes-sigs/cri-tools/releases/download/v${CRIO_VERSION}.0/crictl-v${CRIO_VERSION}.0-linux-${SEED_ARCH}.tar.gz  | tar -C /usr/local/bin -xz
-    chmod +x /usr/local/bin/crictl
-fi
+echo "==============================================================================================================================="
+echo "= Install crictl"
+echo "==============================================================================================================================="
+curl -sL https://github.com/kubernetes-sigs/cri-tools/releases/download/v${CRIO_VERSION}.0/crictl-v${CRIO_VERSION}.0-linux-${SEED_ARCH}.tar.gz  | tar -C /usr/local/bin -xz
+chmod +x /usr/local/bin/crictl
 
 echo "==============================================================================================================================="
 echo "= Clean ubuntu distro"
@@ -458,6 +454,9 @@ ExecStart=/usr/local/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $
 SHELL
 
 echo 'KUBELET_EXTRA_ARGS="--fail-swap-on=false --read-only-port=10255"' > /etc/default/kubelet
+
+apt dist-upgrade -y
+apt autoremove -y
 
 echo 'export PATH=/opt/cni/bin:$PATH' >> /etc/profile.d/apps-bin-path.sh
 

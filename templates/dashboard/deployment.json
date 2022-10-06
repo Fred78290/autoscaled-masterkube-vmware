@@ -23,10 +23,15 @@
                 }
             },
             "spec": {
+                "securityContext": {
+                    "seccompProfile": {
+                        "type": "RuntimeDefault"
+                    }
+                },
                 "containers": [
                     {
                         "name": "kubernetes-dashboard",
-                        "image": "kubernetesui/dashboard:v2.4.0",
+                        "image": "kubernetesui/dashboard:v2.6.1",
                         "imagePullPolicy": "Always",
                         "ports": [
                             {
@@ -36,7 +41,7 @@
                         ],
                         "args": [
                             "--auto-generate-certificates",
-                            "--namespace=kubernetes-dashboard"
+                            "--namespace=$K8NAMESPACE"
                         ],
                         "volumeMounts": [
                             {

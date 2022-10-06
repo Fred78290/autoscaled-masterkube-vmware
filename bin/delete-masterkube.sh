@@ -5,18 +5,22 @@ MASTERKUBE=${NODEGROUP_NAME}-masterkube
 CONTROLNODES=3
 WORKERNODES=3
 FORCE=NO
-GOVCDEFS=${CURDIR}/govc.defs
 
-TEMP=$(getopt -o fg:p:r: --long aws-defs:,force,node-group:,profile:,region: -n "$0" -- "$@")
+pushd ${CURDIR}/../
+
+CONFIGURATION_LOCATION=${PWD}
+GOVCDEFS=${PWD}/bin/govc.defs
+
+TEMP=$(getopt -o fg:p:r: --long configuration-location:,govc-defs:,force,node-group:,profile:,region: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
 while true; do
     case "$1" in
-        --aws-defs)
+        --govc-defs)
             GOVCDEFS=$2
             if [ ! -f ${GOVCDEFS} ]; then
-                echo_red "AWS definitions: ${GOVCDEFS} not found"
+                echo_red "GOVC definitions: ${GOVCDEFS} not found"
                 exit 1
             fi
             shift 2
@@ -37,6 +41,14 @@ while true; do
             NODEGROUP_NAME=$2
             shift 2
             ;;
+        --configuration-location)
+            CONFIGURATION_LOCATION=$2
+            if [ ! -d ${CONFIGURATION_LOCATION} ]; then
+                echo_red "kubernetes output : ${CONFIGURATION_LOCATION} not found"
+                exit 1
+            fi
+            shift 2
+            ;;
         --)
             shift
             break
@@ -51,12 +63,14 @@ done
 # import govc hidden definitions
 source ${GOVCDEFS}
 
-pushd ${CURDIR}/../
+TARGET_CONFIG_LOCATION=${CONFIGURATION_LOCATION}/config/${NODEGROUP_NAME}/config
+TARGET_DEPLOY_LOCATION=${CONFIGURATION_LOCATION}/config/${NODEGROUP_NAME}/deployment
+TARGET_CLUSTER_LOCATION=${CONFIGURATION_LOCATION}/cluster/${NODEGROUP_NAME}
 
 echo "Delete masterkube ${MASTERKUBE} previous instance"
 
-if [ -f ./cluster/${NODEGROUP_NAME}/buildenv ]; then
-    source ./cluster/${NODEGROUP_NAME}/buildenv
+if [ -f ${TARGET_CLUSTER_LOCATION}/buildenv ]; then
+    source ${TARGET_CLUSTER_LOCATION}/buildenv
 fi
 
 if [ "$(uname -s)" == "Linux" ]; then
@@ -87,8 +101,8 @@ if [ "$FORCE" = "YES" ]; then
 
         sudo $SED -i "/${MASTERKUBE_NODE}/d" /etc/hosts
     done
-elif [ -f ./cluster/${NODEGROUP_NAME}/config ]; then
-    for vm in $(kubectl get node -o json --kubeconfig ./cluster/${NODEGROUP_NAME}/config | jq '.items| .[] | .metadata.labels["kubernetes.io/hostname"]')
+elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
+    for vm in $(kubectl get node -o json --kubeconfig ${TARGET_CLUSTER_LOCATION}/config | jq '.items| .[] | .metadata.labels["kubernetes.io/hostname"]')
     do
         vm=$(echo -n $vm | tr -d '"')
         if [ ! -z "$(govc vm.info $vm 2>&1)" ]; then
@@ -108,12 +122,13 @@ fi
 
 ./bin/kubeconfig-delete.sh $MASTERKUBE $NODEGROUP_NAME &> /dev/null
 
-if [ -f config/${NODEGROUP_NAME}/vmware-autoscaler.pid ]; then
-    kill $(cat config/${NODEGROUP_NAME}/vmware-autoscaler.pid)
+if [ -f ${TARGET_CONFIG_LOCATION}/vmware-autoscaler.pid ]; then
+    kill ${TARGET_CONFIG_LOCATION}/vmware-autoscaler.pid
 fi
 
-rm -rf ./cluster/${NODEGROUP_NAME}
-rm -rf ./config/${NODEGROUP_NAME}
+rm -rf ${TARGET_CLUSTER_LOCATION}
+rm -rf ${TARGET_CONFIG_LOCATION}
+rm -rf ${TARGET_DEPLOY_LOCATION}
 
 sudo $SED -i "/${MASTERKUBE}/d" /etc/hosts
 sudo $SED -i "/masterkube-vmware/d" /etc/hosts

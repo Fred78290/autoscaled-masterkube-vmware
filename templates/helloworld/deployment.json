@@ -22,17 +22,43 @@
                 }
             },
             "spec": {
-                "hostNetwork": true,
                 "restartPolicy": "Always",
                 "terminationGracePeriodSeconds": 30,
-                "dnsPolicy": "ClusterFirstWithHostNet",
-                "securityContext": {},
-                "schedulerName": "default-scheduler",
+                "affinity": {
+                    "podAntiAffinity": {
+                        "requiredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "labelSelector": {
+                                    "matchExpressions": [
+                                        {
+                                            "key": "app",
+                                            "operator": "In",
+                                            "values": [
+                                                "helloworld"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                "topologyKey": "kubernetes.io/hostname"
+                            }
+                        ]
+                    }
+                },
                 "containers": [
                     {
                         "name": "helloworld",
                         "image": "fred78290/helloworld:v1.0.0",
                         "imagePullPolicy": "IfNotPresent",
+                        "resources": {
+                            "limits": {
+                                "cpu": "10m",
+                                "memory": "20Mi"
+                            },
+                            "requests": {
+                                "cpu": "10m",
+                                "memory": "20Mi"
+                            }
+                        },
                         "ports": [
                             {
                                 "containerPort": 8080,

@@ -23,6 +23,7 @@
             },
             "spec": {
                 "serviceAccountName": "cluster-autoscaler",
+                "priorityClassName": "system-cluster-critical",
                 "nodeSelector": {
                     "master": "true"
                 },

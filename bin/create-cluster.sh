@@ -184,8 +184,10 @@ case "$CNI_PLUGIN" in
         exit -1
 esac
 
+IFS=. read VERSION MAJOR MINOR <<<$KUBERNETES_VERSION
+
 cat > ${KUBEADM_CONFIG} <<EOF
-apiVersion: kubeadm.k8s.io/v1beta2
+apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 bootstrapTokens:
 - groups:
@@ -199,7 +201,7 @@ localAPIEndpoint:
   advertiseAddress: ${APISERVER_ADVERTISE_ADDRESS}
   bindPort: ${APISERVER_ADVERTISE_PORT}
 nodeRegistration:
-  criSocket: ${CONTAINER_CTL}
+  criSocket: unix://${CONTAINER_CTL}
   name: ${NODENAME}
   taints:
   - effect: NoSchedule
@@ -207,10 +209,8 @@ nodeRegistration:
   - effect: NoSchedule
     key: node-role.kubernetes.io/control-plane
   kubeletExtraArgs:
-    network-plugin: cni
     container-runtime: ${CONTAINER_RUNTIME}
     container-runtime-endpoint: ${CONTAINER_CTL}
-    provider-id: ${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}
 ---
 kind: KubeletConfiguration
 apiVersion: kubelet.config.k8s.io/v1beta1
@@ -229,6 +229,7 @@ authorization:
     cacheUnauthorizedTTL: 0s
 clusterDNS:
 - ${CLUSTER_DNS}
+cgroupDriver: systemd
 failSwapOn: false
 hairpinMode: hairpin-veth
 readOnlyPort: 10255
@@ -250,12 +251,10 @@ syncFrequency: 0s
 volumeStatsAggPeriod: 0s
 maxPods: ${MAX_PODS}
 ---
-apiVersion: kubeadm.k8s.io/v1beta2
+apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 certificatesDir: /etc/kubernetes/pki
 clusterName: ${NODEGROUP_NAME}
-dns:
-  type: CoreDNS
 imageRepository: k8s.gcr.io
 kubernetesVersion: ${KUBERNETES_VERSION}
 networking:
@@ -264,6 +263,9 @@ networking:
   podSubnet: ${POD_NETWORK_CIDR}
 scheduler: {}
 controlPlaneEndpoint: ${CONTROL_PLANE_ENDPOINT_HOST}:${APISERVER_ADVERTISE_PORT}
+dns:
+  imageRepository: k8s.gcr.io/coredns
+  imageTag: v1.9.3
 apiServer:
   extraArgs:
     authorization-mode: Node,RBAC
@@ -289,7 +291,7 @@ done
 
 # External ETCD
 if [ "$EXTERNAL_ETCD" = "true" ]; then
-    cat >> ${KUBEADM_CONFIG} <<EOF
+  cat >> ${KUBEADM_CONFIG} <<EOF
 etcd:
   external:
     caFile: /etc/etcd/ssl/ca.pem
@@ -318,6 +320,8 @@ echo "Retrieve token infos"
 openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //' | tr -d '\n' > $CLUSTER_DIR/ca.cert
 kubeadm token list 2>&1 | grep "authentication,signing" | awk '{print $1}'  | tr -d '\n' > $CLUSTER_DIR/token 
 
+echo "Get token:$(cat $CLUSTER_DIR/token)"
+echo "Get cacert:$(cat $CLUSTER_DIR/ca.cert)"
 echo "Set local K8 environement"
 
 mkdir -p $HOME/.kube
@@ -384,6 +388,13 @@ elif [ "$CNI_PLUGIN" = "romana" ]; then
     kubectl apply -f https://raw.githubusercontent.com/romana/romana/master/containerize/specs/romana-kubeadm.yml 2>&1
 
 fi
+
+cat > patch.yaml <<EOF
+spec:
+    providerID: '${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}'
+EOF
+
+kubectl patch node ${HOSTNAME} --patch-file patch.yaml
 
 kubectl label nodes ${HOSTNAME} "cluster.autoscaler.nodegroup/name=${NODEGROUP_NAME}" \
     "node-role.kubernetes.io/master=" \

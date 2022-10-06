@@ -87,7 +87,7 @@ During the process the script will create many files located in
 | `-t\|--transport`  | Override the transport to be used between autoscaler and vmware-autoscaler [**tcp**\|**linux**] |linux|
 | `--node-group`  | Override the node group name |vmware-ca-k8s|
 | `--cni-plugin`  | Override CNI plugin [**calico**\|**flannel**\|**weave**\|**romana**]|flannel|
-| `-n\|--cni-version`  | Override CNI plugin version |v1.0.1|
+| `-n\|--cni-version`  | Override CNI plugin version |v1.1.1|
 | `-k\|--kubernetes-version`  |Which version of kubernetes to use |latest|
 | **Flags in ha mode only** |
 | `-e\|--create-external-etcd` | Allow to create and use an external HA etcd cluster  | NO |

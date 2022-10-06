@@ -10,9 +10,14 @@ set -e
 
 CURDIR=$(dirname $0)
 
+pushd ${CURDIR}/../
+
+export PATH=${PWD}/bin:${PATH}
+
 export SCHEME="vmware"
 export NODEGROUP_NAME="vmware-ca-k8s"
 export MASTERKUBE="${NODEGROUP_NAME}-masterkube"
+export DASHBOARD_HOSTNAME=masterkube-vmware-dashboard
 export SSH_PRIVATE_KEY="$HOME/.ssh/id_rsa"
 export SSH_PUBLIC_KEY="${SSH_PRIVATE_KEY}.pub"
 export KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
@@ -24,7 +29,7 @@ export SEED_USER=ubuntu
 export SEED_IMAGE="focal-server-cloudimg-seed"
 export ROOT_IMG_NAME=focal-kubernetes
 export CNI_PLUGIN=flannel
-export CNI_VERSION="v1.0.1"
+export CNI_VERSION="v1.1.1"
 export USE_KEEPALIVED=NO
 export HA_CLUSTER=false
 export FIRSTNODE=0
@@ -43,6 +48,9 @@ export SCALEDOWNDELAYAFTERFAILURE="1m"
 export SCALEDOWNUNEEDEDTIME="1m"
 export SCALEDOWNUNREADYTIME="1m"
 export DEFAULT_MACHINE="medium"
+export NGINX_MACHINE="tiny"
+export CONTROL_PLANE_MACHINE="small"
+export WORKER_NODE_MACHINE="medium"
 export UNREMOVABLENODERECHECKTIMEOUT="1m"
 export OSDISTRO=$(uname -s)
 export TRANSPORT="tcp"
@@ -55,6 +63,10 @@ export NET_MASK=255.255.255.0
 export NET_MASK_CIDR=24
 export VC_NETWORK_PRIVATE="Private Network"
 export VC_NETWORK_PUBLIC="Public Network"
+export USE_DHCP_ROUTES_PRIVATE=true
+export USE_DHCP_ROUTES_PUBLIC=true
+export NETWORK_PUBLIC_ROUTES=()
+export NETWORK_PRIVATE_ROUTES=()
 export METALLB_IP_RANGE=10.0.0.100-10.0.0.127
 export REGISTRY=fred78290
 export LAUNCH_CA=YES
@@ -66,29 +78,39 @@ export EXTERNAL_ETCD=false
 export TARGET_IMAGE="${ROOT_IMG_NAME}-cni-${CNI_PLUGIN}-${KUBERNETES_VERSION}-${SEED_ARCH}-${CONTAINER_ENGINE}"
 export MAX_PODS=110
 export SILENT="&> /dev/null"
+export NFS_SERVER_ADDRESS=
+export NFS_SERVER_PATH=
+export NFS_STORAGE_CLASS=nfs-client
+export CONFIGURATION_LOCATION=${PWD}
+export SSL_LOCATION=${CONFIGURATION_LOCATION}/etc/ssl
+export GOVCDEFS=${CONFIGURATION_LOCATION}/bin/govc.defs
 
-export GOVCDEFS=${CURDIR}/govc.defs
-
-#export GOVC_DATACENTER=
-#export GOVC_DATASTORE=
-#export GOVC_FOLDER=
-#export GOVC_HOST=
-#export GOVC_INSECURE=
-#export GOVC_NETWORK=
-#export GOVC_USERNAME=
-#export GOVC_PASSWORD=
-#export GOVC_RESOURCE_POOL=
-#export GOVC_URL=
-#export GOVC_VIM_VERSION="6.0"
+# defined in private govc.defs
+export CERT_EMAIL=
+export PUBLIC_DOMAIN_NAME=
+export GOVC_DATACENTER=
+export GOVC_DATASTORE=
+export GOVC_FOLDER=
+export GOVC_HOST=
+export GOVC_INSECURE=
+export GOVC_NETWORK=
+export GOVC_USERNAME=
+export GOVC_PASSWORD=
+export GOVC_RESOURCE_POOL=
+export GOVC_URL=
+export GOVC_VIM_VERSION="6.0"
 
 # Sample machine definition
-MACHINE_DEFS=$(cat ${CURDIR}/../templates/machines.json)
+MACHINE_DEFS=$(cat ${PWD}/templates/machines.json)
 
 SSH_OPTIONS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 SCP_OPTIONS="${SSH_OPTIONS} -p -r"
+DELETE_CLUSTER=NO
 
 # import govc hidden definitions
-source ${GOVCDEFS}
+if [ -f ${GOVCDEFS} ]; then
+    source ${GOVCDEFS}
+fi
 
 function verbose() {
     if [ $VERBOSE = "YES" ]; then
@@ -161,6 +183,42 @@ function nextip()
     echo "$NEXT_IP"
 }
 
+function build_routes() {
+    local ROUTES="[]"
+    local ROUTE=
+
+    for ROUTE in $@
+    do
+        local TO=
+        local VIA=
+        local METRIC=500
+
+        IFS=, read -a DEFS <<<$ROUTE
+
+        for DEF in ${DEFS[@]}
+        do
+            IFS== read KEY VALUE <<<$DEF
+            case $KEY in
+                to)
+                    TO=$VALUE
+                    ;;
+                via)
+                    VIA=$VALUE
+                    ;;
+                metric)
+                    METRIC=$VALUE
+                    ;;
+            esac
+        done
+
+        if [ ! -z "$TO" ] && [ ! -z "$VIA" ]; then
+            ROUTES=$(echo $ROUTES | jq --arg TO $TO --arg VIA $VIA --argjson METRIC $METRIC '. += [{ "to": $TO, "via": $VIA, "metric": $METRIC }]')
+        fi
+    done
+
+    echo -n $ROUTES
+}
+
 function usage() {
 cat <<EOF
 $0 create a kubernetes simple cluster or HA cluster with 3 control planes
@@ -169,8 +227,19 @@ Options are:
 --verbose | -v                                 # Verbose
 --trace | -x                                   # Trace execution
 --resume | -r                                  # Allow to resume interrupted creation of cluster kubernetes
---govc-defs                                    # Override the GOVC definitions, default ${GOVCDEFS}
+--delete                                       # Delete cluster and exit
 --create-image-only                            # Create image only
+
+### Flags to set some location informations
+
+--configuration-location                       # Specify where configuration will be stored, default ${CONFIGURATION_LOCATION}
+--ssl-location                                 # Specify where the etc/ssl dir is stored, default ${SSL_LOCATION}
+--govc-defs                                    # Override the GOVC definitions, default ${GOVCDEFS}
+
+### CERT Design domain
+--cert-email                                   # Specify the mail for lets encrypt, default ${CERT_EMAIL}
+--public-domain                                # Specify the public domain to use, default ${PUBLIC_DOMAIN_NAME}
+--dashboard-hostname                           # Specify the hostname for kubernetes dashboard, default ${DASHBOARD_HOSTNAME}
 
 ### Design the kubernetes cluster
 
@@ -179,6 +248,9 @@ Options are:
 --container-runtime=<docker|containerd|cri-o>  # Specify which OCI runtime to use, default ${CONTAINER_ENGINE}
 --max-pods                                     # Specify the max pods per created VM, default ${MAX_PODS}
 --default-machine | -d=<value>                 # Override machine type used for auto scaling, default $DEFAULT_MACHINE
+--nginx-machine                                # Override machine type used for nginx as ELB, default $NGINX_MACHINE
+--control-plane-machine                        # Override machine type used for control plane, default $CONTROL_PLANE_MACHINE
+--worker-node-machine                          # Override machine type used for worker node, default $WORKER_NODE_MACHINE
 --ssh-private-key | -s=<value>                 # Override ssh key is used, default $SSH_PRIVATE_KEY
 --transport | -t=<value>                       # Override the transport to be used between autoscaler and vmware-autoscaler, default $TRANSPORT
 --node-group=<value>                           # Override the node group name, default $NODEGROUP_NAME
@@ -209,6 +281,16 @@ Options are:
 --net-dns=<value>                              # Override the IP DNS, default $NET_DNS
 --net-domain=<value>                           # Override the domain name, default $NET_DOMAIN
 --metallb-ip-range                             # Override the metalb ip range, default $METALLB_IP_RANGE
+--dont-use-dhcp-routes-private                 # Tell if we don't use DHCP routes in private network, default $USE_DHCP_ROUTES_PRIVATE
+--dont-use-dhcp-routes-public                  # Tell if we don't use DHCP routes in public network, default $USE_DHCP_ROUTES_PUBLIC
+--add-route-private                            # Add route to private network syntax is --add-route-private=to=X.X.X.X/YY,via=X.X.X.X,metric=100 --add-route-private=to=Y.Y.Y.Y/ZZ,via=X.X.X.X,metric=100, default ${NETWORK_PRIVATE_ROUTES[@]}
+--add-route-public                             # Add route to public network syntax is --add-route-public=to=X.X.X.X/YY,via=X.X.X.X,metric=100 --add-route-public=to=Y.Y.Y.Y/ZZ,via=X.X.X.X,metric=100, default ${NETWORK_PUBLIC_ROUTES[@]}
+
+### Flags to configure nfs client provisionner
+
+--nfs-server-adress                            # The NFS server address, default $NFS_SERVER_ADDRESS
+--nfs-server-mount                             # The NFS server mount path, default $NFS_SERVER_PATH
+--nfs-storage-class                            # The storage class name to use, default $NFS_STORAGE_CLASS
 
 ### Flags for autoscaler
 
@@ -241,7 +323,7 @@ else
     fi
 fi
 
-TEMP=$(getopt -o xvheucrk:n:p:s:t: --long create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
+TEMP=$(getopt -o xvheucrk:n:p:s:t: --long nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 
 eval set -- "$TEMP"
 
@@ -275,6 +357,39 @@ while true; do
     -r|--resume)
         RESUME=YES
         shift 1
+        ;;
+    --delete)
+        DELETE_CLUSTER=YES
+        shift 1
+        ;;
+    --configuration-location)
+        CONFIGURATION_LOCATION=$2
+        mkdir -p ${CONFIGURATION_LOCATION}
+        if [ ! -d ${CONFIGURATION_LOCATION} ]; then
+            echo_red "kubernetes output : ${CONFIGURATION_LOCATION} not found"
+            exit 1
+        fi
+        shift 2
+        ;;
+    --ssl-location)
+        SSL_LOCATION=$2
+        if [ ! -d ${SSL_LOCATION} ]; then
+            echo_red "etc dir: ${SSL_LOCATION} not found"
+            exit 1
+        fi
+        shift 2
+        ;;
+    --cert-email)
+        CERT_EMAIL=$2
+        shift 2
+        ;;
+    --dashboard-hostname)
+        DASHBOARD_HOSTNAME=$2
+        shift 2
+        ;;
+    --public-domain)
+        PUBLIC_DOMAIN_NAME=$2
+        shift 2
         ;;
     --govc-defs)
         GOVCDEFS=$2
@@ -350,6 +465,26 @@ while true; do
         shift 2
         ;;
 
+    --dont-use-dhcp-routes-private)
+        USE_DHCP_ROUTES_PRIVATE=false
+        shift 1
+        ;;
+
+    --dont-use-dhcp-routes-public)
+        USE_DHCP_ROUTES_PUBLIC=false
+        shift 2
+        ;;
+
+    --add-route-private)
+        NETWORK_PRIVATE_ROUTES+=($2)
+        shift 2
+        ;;
+
+    --add-route-public)
+        NETWORK_PUBLIC_ROUTES+=($2)
+        shift 2
+        ;;
+
     --net-address)
         NET_IP="$2"
         shift 2
@@ -370,8 +505,33 @@ while true; do
         shift 2
         ;;
 
+    --nfs-server-adress)
+        NFS_SERVER_ADDRESS="$2"
+        shift 2
+        ;;
+    --nfs-server-mount)
+        NFS_SERVER_PATH="$2"
+        shift 2
+        ;;
+    --nfs-storage-class)
+        NFS_STORAGE_CLASS="$2"
+        shift 2
+        ;;
+
     -d | --default-machine)
         DEFAULT_MACHINE="$2"
+        shift 2
+        ;;
+    --nginx-machine)
+        NGINX_MACHINE="$2"
+        shift 2
+        ;;
+    --control-plane-machine)
+        CONTROL_PLANE_MACHINE="$2"
+        shift 2
+        ;;
+    --worker-node-machine)
+        WORKER_NODE_MACHINE="$2"
         shift 2
         ;;
     -s | --ssh-private-key)
@@ -458,15 +618,20 @@ while true; do
     esac
 done
 
-pushd ${CURDIR}/../
-
 TARGET_IMAGE="${ROOT_IMG_NAME}-cni-${CNI_PLUGIN}-${KUBERNETES_VERSION}-${CONTAINER_ENGINE}-${SEED_ARCH}"
 
 export SSH_KEY_FNAME="$(basename $SSH_PRIVATE_KEY)"
 export SSH_PUBLIC_KEY="${SSH_PRIVATE_KEY}.pub"
 
+export TARGET_CONFIG_LOCATION=${CONFIGURATION_LOCATION}/config/${NODEGROUP_NAME}/config
+export TARGET_DEPLOY_LOCATION=${CONFIGURATION_LOCATION}/config/${NODEGROUP_NAME}/deployment
+export TARGET_CLUSTER_LOCATION=${CONFIGURATION_LOCATION}/cluster/${NODEGROUP_NAME}
+
 # Check if we can resume the creation process
-if [ ! -f ./config/${NODEGROUP_NAME}/buildenv ] && [ "$RESUME" = "YES" ]; then
+if [ "${DELETE_CLUSTER}" = "YES" ]; then
+    delete-masterkube.sh --configuration-location=${CONFIGURATION_LOCATION} --govc-defs=${GOVCDEFS} --node-group=${NODEGROUP_NAME}
+    exit
+elif [ ! -f ${TARGET_CONFIG_LOCATION}/buildenv ] && [ "$RESUME" = "YES" ]; then
     echo_red "Unable to resume, building env is not found"
     exit -1
 fi
@@ -539,14 +704,14 @@ eval echo_grey "Transport set to:${TRANSPORT}, listen endpoint at ${LISTEN}" $SI
 export PATH=$PWD/bin:$PATH
 
 # If CERT doesn't exist, create one autosigned
-if [ ! -f ./etc/ssl/privkey.pem ]; then
+if [ ! -f ${SSL_LOCATION}/privkey.pem ]; then
     echo_title "Create certificat, please fill value"
 
-    mkdir -p ./etc/ssl/
-    openssl genrsa 2048 >./etc/ssl/privkey.pem
-    openssl req -new -x509 -nodes -sha1 -days 3650 -key ./etc/ssl/privkey.pem >./etc/ssl/cert.pem
-    cat ./etc/ssl/cert.pem ./etc/ssl/privkey.pem >./etc/ssl/fullchain.pem
-    chmod 644 ./etc/ssl/*
+    mkdir -p ${SSL_LOCATION}/
+    openssl genrsa 2048 >${SSL_LOCATION}/privkey.pem
+    openssl req -new -x509 -nodes -sha1 -days 3650 -key ${SSL_LOCATION}/privkey.pem >${SSL_LOCATION}/cert.pem
+    cat ${SSL_LOCATION}/cert.pem ${SSL_LOCATION}/privkey.pem >${SSL_LOCATION}/fullchain.pem
+    chmod 644 ${SSL_LOCATION}/*
 
     echo_separator
 fi
@@ -574,22 +739,26 @@ if [ "${CREATE_IMAGE_ONLY}" = "YES" ]; then
 fi
 
 # Extract the domain name from CERT
-export DOMAIN_NAME=$(openssl x509 -noout -subject -in ./etc/ssl/cert.pem | awk -F= '{print $NF}' | sed -e 's/^[ \t]*//' | sed 's/\*\.//g')
+export DOMAIN_NAME=$(openssl x509 -noout -subject -in ${SSL_LOCATION}/cert.pem | awk -F= '{print $NF}' | sed -e 's/^[ \t]*//' | sed 's/\*\.//g')
 
 # Delete previous exixting version
 if [ "$RESUME" = "NO" ]; then
     echo_title "Launch custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
-    delete-masterkube.sh
+    delete-masterkube.sh --configuration-location=${CONFIGURATION_LOCATION} --govc-defs=${GOVCDEFS} --node-group=${NODEGROUP_NAME}
 else
     echo_title "Resume custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
 fi
 
-mkdir -p ./config/${NODEGROUP_NAME}
-mkdir -p ./cluster/${NODEGROUP_NAME}
+mkdir -p ${TARGET_CONFIG_LOCATION}
+mkdir -p ${TARGET_CLUSTER_LOCATION}
 
 if [ "$RESUME" = "NO" ]; then
-    cat ${GOVCDEFS} > ./config/${NODEGROUP_NAME}/buildenv
-    cat > ./config/${NODEGROUP_NAME}/buildenv <<EOF
+    cat ${GOVCDEFS} > ${TARGET_CONFIG_LOCATION}/buildenv
+    cat > ${TARGET_CONFIG_LOCATION}/buildenv <<EOF
+export TARGET_CONFIG_LOCATION=${TARGET_CONFIG_LOCATION}
+export TARGET_DEPLOY_LOCATION=${TARGET_DEPLOY_LOCATION}
+export TARGET_CLUSTER_LOCATION=${TARGET_CLUSTER_LOCATION}
+export PUBLIC_DOMAIN_NAME=${PUBLIC_DOMAIN_NAME}
 export PUBLIC_IP="$PUBLIC_IP"
 export SCHEME="$SCHEME"
 export NODEGROUP_NAME="$NODEGROUP_NAME"
@@ -634,19 +803,25 @@ export NET_DNS=$NET_DNS
 export NET_MASK=$NET_MASK
 export NET_MASK_CIDR=$NET_MASK_CIDR
 export VC_NETWORK_PRIVATE=$VC_NETWORK_PRIVATE
+export USE_DHCP_ROUTES_PRIVATE=$USE_DHCP_ROUTES_PRIVATE
 export VC_NETWORK_PUBLIC=$VC_NETWORK_PUBLIC
+export USE_DHCP_ROUTES_PUBLIC=$USE_DHCP_ROUTES_PUBLIC
 export REGISTRY=$REGISTRY
 export LAUNCH_CA=$LAUNCH_CA
 export CLUSTER_LB=$CLUSTER_LB
 export USE_KEEPALIVED=$USE_KEEPALIVED
 export EXTERNAL_ETCD=$EXTERNAL_ETCD
 export FIRSTNODE=$FIRSTNODE
+export NFS_SERVER_ADDRESS=$NFS_SERVER_ADDRESS
+export NFS_SERVER_PATH=$NFS_SERVER_PATH
+export NFS_STORAGE_CLASS=$NFS_STORAGE_CLASS
+
 EOF
 else
-    source ./config/${NODEGROUP_NAME}/buildenv
+    source ${TARGET_CONFIG_LOCATION}/buildenv
 fi
 
-echo "${KUBERNETES_PASSWORD}" >./config/${NODEGROUP_NAME}/kubernetes-password.txt
+echo "${KUBERNETES_PASSWORD}" >${TARGET_CONFIG_LOCATION}/kubernetes-password.txt
 
 # Due to my vsphere center the folder name refer more path, so I need to precise the path instead
 FOLDER_OPTIONS=
@@ -658,7 +833,7 @@ fi
 
 
 # Cloud init vendor-data
-cat >./config/${NODEGROUP_NAME}/vendordata.yaml <<EOF
+cat >${TARGET_CONFIG_LOCATION}/vendordata.yaml <<EOF
 #cloud-config
 package_update: true
 package_upgrade: true
@@ -672,7 +847,7 @@ system_info:
         name: ${KUBERNETES_USER}
 EOF
 
-gzip -c9 <./config/${NODEGROUP_NAME}/vendordata.yaml | $BASE64 | tee >config/${NODEGROUP_NAME}/vendordata.base64
+gzip -c9 <${TARGET_CONFIG_LOCATION}/vendordata.yaml | $BASE64 | tee > ${TARGET_CONFIG_LOCATION}/vendordata.base64
 
 IPADDRS=()
 NODE_IP=$NET_IP
@@ -703,62 +878,105 @@ else
     TOTALNODES=$WORKERNODES
 fi
 
+PUBLIC_ROUTES_DEFS=$(build_routes ${NETWORK_PUBLIC_ROUTES[@]})
+PRIVATE_ROUTES_DEFS=$(build_routes ${NETWORK_PRIVATE_ROUTES[@]})
+
 function create_vm() {
     local INDEX=$1
     local PUBLIC_NODE_IP=$2
     local NODE_IP=$3
-
+    local MACHINE_TYPE=$CONTROL_PLANE_MACHINE
     local NODEINDEX=$INDEX
     local MASTERKUBE_NODE=
     local IPADDR=
     local VMHOST=
+    local DISK_SIZE=
+    local NUM_VCPUS=
+    local MEMSIZE=
 
     if [ $NODEINDEX = 0 ]; then
+        # node 0 is ELB on HA mode
+        if [ $HA_CLUSTER = "true" ]; then
+            MACHINE_TYPE=$NGINX_MACHINE
+        fi
+
         MASTERKUBE_NODE="${MASTERKUBE}"
     elif [[ $NODEINDEX > $CONTROLNODES ]]; then
         NODEINDEX=$((INDEX - $CONTROLNODES))
         MASTERKUBE_NODE="${NODEGROUP_NAME}-worker-0${NODEINDEX}"
+        MACHINE_TYPE=$WORKER_NODE_MACHINE
     else
         MASTERKUBE_NODE="${NODEGROUP_NAME}-master-0${NODEINDEX}"
     fi
 
     if [ -z "$(govc vm.info ${MASTERKUBE_NODE} 2>&1)" ]; then
-
         if [ "$PUBLIC_NODE_IP" = "DHCP" ]; then
-            cat >./config/${NODEGROUP_NAME}/network-$INDEX.yaml <<EOF
-network:
-  version: 2
-  ethernets:
-    eth0:
-      dhcp4: true
-    eth1:
-      gateway4: $NET_GATEWAY
-      addresses:
-      - $NODE_IP/$NET_MASK_CIDR
+            NETWORK_DEFS=$(cat <<EOF
+            {
+                "network": {
+                    "version": 2,
+                    "ethernets": {
+                        "eth0": {
+                            "dhcp4": true,
+                            "dhcp4-overrides": {
+                                "use-routes": $USE_DHCP_ROUTES_PUBLIC
+                            }
+                        },
+                        "eth1": {
+                            "gateway4": "$NET_GATEWAY",
+                            "addresses": [
+                                "$NODE_IP/$NET_MASK_CIDR"
+                            ]
+                        }
+                    }
+                }
+            }
 EOF
+)
         else
-            cat >./config/${NODEGROUP_NAME}/network-$INDEX.yaml <<EOF
-network:
-  version: 2
-  ethernets:
-    eth0:
-      gateway4: $NET_GATEWAY
-      addresses:
-      - $PUBLIC_NODE_IP/$PUBLIC_MASK_CIDR
-      nameservers:
-#       search: [$NET_DOMAIN] GENERATE WRONG /etc/resolv.conv in pods
-        addresses: [$NET_DNS]
-    eth1:
-      gateway4: $NET_GATEWAY
-      addresses:
-      - $NODE_IP/$NET_MASK_CIDR
+            NETWORK_DEFS=$(cat <<EOF
+            {
+                "network": {
+                    "version": 2,
+                    "ethernets": {
+                        "eth0": {
+                            "gateway4": "$NET_GATEWAY",
+                            "addresses": [
+                                "$PUBLIC_NODE_IP/$PUBLIC_MASK_CIDR"
+                            ],
+                            "nameservers": {
+                                "addresses": [
+                                    "$NET_DNS"
+                                ]
+                            }
+                        },
+                        "eth1": {
+                            "addresses": [
+                                "$NODE_IP/$NET_MASK_CIDR"
+                            ]
+                        }
+                    }
+                }
+            }
 EOF
+)
         fi
 
+        if [ ${#NETWORK_PUBLIC_ROUTES[@]} -gt 0 ]; then
+            NETWORK_DEFS=$(echo ${NETWORK_DEFS} | jq --argjson ROUTES "$PUBLIC_ROUTES_DEFS" '.network.ethernets.eth0.routes = $ROUTES')
+        fi
+
+        if [ ${#NETWORK_PRIVATE_ROUTES[@]} -gt 0 ]; then
+            NETWORK_DEFS=$(echo ${NETWORK_DEFS} | jq --argjson ROUTES "$PRIVATE_ROUTES_DEFS" '.network.ethernets.eth1.routes = $ROUTES')
+        fi
+
+        echo ${NETWORK_DEFS} | jq . > ${TARGET_CONFIG_LOCATION}/network-$INDEX.json
+        echo ${NETWORK_DEFS} | yq -P - | tee > /dev/null > ${TARGET_CONFIG_LOCATION}/network-$INDEX.yaml
+
         # Cloud init meta-data
-        cat >./config/${NODEGROUP_NAME}/metadata-${INDEX}.json <<EOF
+        cat >${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.json <<EOF
         {
-            "network": "$(cat ./config/${NODEGROUP_NAME}/network-${INDEX}.yaml | gzip -c9 | $BASE64)",
+            "network": "$(cat ${TARGET_CONFIG_LOCATION}/network-${INDEX}.yaml | gzip -c9 | $BASE64)",
             "network.encoding": "gzip+base64",
             "local-hostname": "${MASTERKUBE_NODE}",
             "instance-id": "$(uuidgen)"
@@ -766,37 +984,46 @@ EOF
 EOF
 
     # Cloud init user-data
-        cat > ./config/${NODEGROUP_NAME}/userdata-${INDEX}.yaml <<EOF
+        cat > ${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.yaml <<EOF
 #cloud-config
 runcmd:
+- 'echo 1 > /sys/block/sda/device/rescan'
+- growpart /dev/sda 1
+- resize2fs /dev/sda1
 - echo "Create ${MASTERKUBE_NODE}" > /var/log/masterkube.log
 EOF
 
-        gzip -c9 <./config/${NODEGROUP_NAME}/metadata-${INDEX}.json | $BASE64 | tee >config/${NODEGROUP_NAME}/metadata-${INDEX}.base64
-        gzip -c9 <./config/${NODEGROUP_NAME}/userdata-${INDEX}.yaml | $BASE64 | tee >config/${NODEGROUP_NAME}/userdata-${INDEX}.base64
+        gzip -c9 <${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.json | $BASE64 | tee > ${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.base64
+        gzip -c9 <${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.yaml | $BASE64 | tee > ${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.base64
+
+        MACHINE_TYPE=$(echo $MACHINE_DEFS | jq --arg MACHINE $MACHINE_TYPE 'to_entries[]|select(.key == $MACHINE)|.value')
+        DISK_SIZE=$(echo $MACHINE_TYPE | jq -r .disksize)
+        NUM_VCPUS=$(echo $MACHINE_TYPE | jq -r .vcpus)
+        MEMSIZE=$(echo $MACHINE_TYPE | jq -r .memsize)
+        DISK_SIZE=$(echo "${DISK_SIZE} / 1024" | bc)
 
         echo_line
         echo_blue_bold "Clone ${TARGET_IMAGE} to ${MASTERKUBE_NODE}"
         echo_blue_bold "TARGET_IMAGE=${TARGET_IMAGE}"
         echo_blue_bold "MASTERKUBE_NODE=${MASTERKUBE_NODE}"
+        echo_blue_bold "MEMSIZE=${MEMSIZE}"
+        echo_blue_bold "NUM_VCPUS=${NUM_VCPUS}"
+        echo_blue_bold "DISK_SIZE=${DISK_SIZE}G"
         echo_line
 
-        # Clone my template, node 0 is ELB on HA mode
-        if [ $INDEX = 0 ] && [ $HA_CLUSTER = "true" ]; then
-            govc vm.clone -link=false -on=false ${FOLDER_OPTIONS} -c=1 -m=1024 -vm=${TARGET_IMAGE} ${MASTERKUBE_NODE} > /dev/null
-        else
-            govc vm.clone -link=false -on=false ${FOLDER_OPTIONS} -c=2 -m=4096 -vm=${TARGET_IMAGE} ${MASTERKUBE_NODE} > /dev/null
-        fi
+        # Clone my template
+        govc vm.clone -link=false -on=false ${FOLDER_OPTIONS} -c=${NUM_VCPUS} -m=${MEMSIZE} -vm=${TARGET_IMAGE} ${MASTERKUBE_NODE} > /dev/null
+        govc vm.disk.change ${FOLDER_OPTIONS} -vm ${MASTERKUBE_NODE} -size="${DISK_SIZE}G" > /dev/null
 
         echo_title "Set cloud-init settings for ${MASTERKUBE_NODE}"
 
         # Inject cloud-init elements
         eval govc vm.change -vm "${MASTERKUBE_NODE}" \
-            -e guestinfo.metadata="$(cat config/${NODEGROUP_NAME}/metadata-${INDEX}.base64)" \
+            -e guestinfo.metadata="$(cat ${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.base64)" \
             -e guestinfo.metadata.encoding="gzip+base64" \
-            -e guestinfo.userdata="$(cat config/${NODEGROUP_NAME}/userdata-${INDEX}.base64)" \
+            -e guestinfo.userdata="$(cat ${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.base64)" \
             -e guestinfo.userdata.encoding="gzip+base64" \
-            -e guestinfo.vendordata="$(cat config/${NODEGROUP_NAME}/vendordata.base64)" \
+            -e guestinfo.vendordata="$(cat ${TARGET_CONFIG_LOCATION}/vendordata.base64)" \
             -e guestinfo.vendordata.encoding="gzip+base64" $SILENT
 
         echo_title "Power On ${MASTERKUBE_NODE}"
@@ -865,7 +1092,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
         fi
     done
 
-    echo "export CLUSTER_NODES=$CLUSTER_NODES" >> ./config/${NODEGROUP_NAME}/buildenv
+    echo "export CLUSTER_NODES=$CLUSTER_NODES" >> ${TARGET_CONFIG_LOCATION}/buildenv
 
     if [ "$EXTERNAL_ETCD" = "true" ]; then
         echo_title "Created etcd cluster: ${CLUSTER_NODES}"
@@ -874,18 +1101,18 @@ if [ "$HA_CLUSTER" = "true" ]; then
 
         for INDEX in $(seq 1 $CONTROLNODES)
         do
-            if [ ! -f ./config/${NODEGROUP_NAME}/etdc-0${INDEX}-prepared ]; then
+            if [ ! -f ${TARGET_CONFIG_LOCATION}/etdc-0${INDEX}-prepared ]; then
                 IPADDR="${IPADDRS[$INDEX]}"
 
                 echo_title "Start etcd node: ${IPADDR}"
                 
                 eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ $SILENT
-                eval scp ${SCP_OPTIONS} cluster/${NODEGROUP_NAME}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster ${SILENT}
+                eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster ${SILENT}
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin $SILENT
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo install-etcd.sh --user=${KUBERNETES_USER} --cluster-nodes="${CLUSTER_NODES}" --node-index="$INDEX" $SILENT
 
-                touch ./config/${NODEGROUP_NAME}/etdc-0${INDEX}-prepared
+                touch ${TARGET_CONFIG_LOCATION}/etdc-0${INDEX}-prepared
             fi
         done
     fi
@@ -895,7 +1122,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
 
         for INDEX in $(seq 1 $CONTROLNODES)
         do
-            if [ ! -f ./config/${NODEGROUP_NAME}/keepalived-0${INDEX}-prepared ]; then
+            if [ ! -f ${TARGET_CONFIG_LOCATION}/keepalived-0${INDEX}-prepared ]; then
                 IPADDR="${IPADDRS[$INDEX]}"
 
                 echo_title "Start keepalived node: ${IPADDR}"
@@ -927,7 +1154,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
                     ${KEEPALIVED_PEER2} \
                     ${KEEPALIVED_STATUS} $SILENT
 
-                touch ./config/${NODEGROUP_NAME}/keepalived-0${INDEX}-prepared
+                touch ${TARGET_CONFIG_LOCATION}/keepalived-0${INDEX}-prepared
             fi
         done
     fi
@@ -937,7 +1164,7 @@ else
     IPRESERVED2=$(nextip $IPRESERVED1)
     CLUSTER_NODES="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDR},${NODEGROUP_NAME}-master-02.${DOMAIN_NAME}:${IPRESERVED1},${NODEGROUP_NAME}-master-03.${DOMAIN_NAME}:${IPRESERVED2}"
 
-    echo "export CLUSTER_NODES=$CLUSTER_NODES" >> ./config/${NODEGROUP_NAME}/buildenv
+    echo "export CLUSTER_NODES=$CLUSTER_NODES" >> ${TARGET_CONFIG_LOCATION}/buildenv
 fi
 
 for INDEX in $(seq $FIRSTNODE $TOTALNODES)
@@ -952,7 +1179,7 @@ do
         MASTERKUBE_NODE="${NODEGROUP_NAME}-master-0${NODEINDEX}"
     fi
 
-    if [ -f ./config/${NODEGROUP_NAME}/kubeadm-0${INDEX}-prepared ]; then
+    if [ -f ${TARGET_CONFIG_LOCATION}/kubeadm-0${INDEX}-prepared ]; then
         echo_title "Already prepared VM $MASTERKUBE_NODE"
     else
         IPADDR="${IPADDRS[$INDEX]}"
@@ -986,7 +1213,7 @@ do
                     --net-if=$NET_IF \
                     --kubernetes-version="${KUBERNETES_VERSION}" $SILENT
 
-                eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ./cluster/${NODEGROUP_NAME} $SILENT
+                eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ${TARGET_CLUSTER_LOCATION}/ $SILENT
             fi
         else
             if [ "$HA_CLUSTER" = "true" ]; then
@@ -1013,7 +1240,7 @@ do
                     --net-if=$NET_IF \
                     --kubernetes-version="${KUBERNETES_VERSION}" $SILENT
 
-                eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ./cluster/${NODEGROUP_NAME} $SILENT
+                eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ${TARGET_CLUSTER_LOCATION}/ $SILENT
 
                 echo_blue_dot_title "Wait for ELB start on IP: ${IPADDRS[0]}"
 
@@ -1025,11 +1252,11 @@ do
                 done
                 echo
 
-                echo -n ${IPADDRS[0]}:6443 > ./cluster/${NODEGROUP_NAME}/manager-ip
+                echo -n ${IPADDRS[0]}:6443 > ${TARGET_CLUSTER_LOCATION}/manager-ip
             elif [[ $INDEX > $CONTROLNODES ]] || [ "$HA_CLUSTER" = "false" ]; then
                     echo_blue_bold "Join node ${MASTERKUBE_NODE} instance worker node, kubernetes version=${KUBERNETES_VERSION}"
 
-                    eval scp ${SCP_OPTIONS} ./cluster/${NODEGROUP_NAME}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
+                    eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
                     eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
                         --use-external-etcd=${EXTERNAL_ETCD} \
@@ -1041,7 +1268,7 @@ do
             else
                 echo_blue_bold "Join node ${MASTERKUBE_NODE} instance master node, kubernetes version=${KUBERNETES_VERSION}"
 
-                eval scp ${SCP_OPTIONS} ./cluster/${NODEGROUP_NAME}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
+                eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
                     --allow-deployment=${MASTER_NODE_ALLOW_DEPLOYMENT} \
@@ -1051,11 +1278,11 @@ do
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
                     --cluster-nodes="${CLUSTER_NODES}" \
                     --net-if=$NET_IF \
-                    --ha-cluster=true $SILENT
+                    --control-plane=true $SILENT
             fi
         fi
 
-        echo $MASTERKUBE_NODE > ./config/${NODEGROUP_NAME}/kubeadm-0${INDEX}-prepared
+        echo $MASTERKUBE_NODE > ${TARGET_CONFIG_LOCATION}/kubeadm-0${INDEX}-prepared
     fi
 
     echo_separator
@@ -1063,20 +1290,20 @@ done
 
 echo_blue_bold "create cluster done"
 
-MASTER_IP=$(cat ./cluster/${NODEGROUP_NAME}/manager-ip)
-TOKEN=$(cat ./cluster/${NODEGROUP_NAME}/token)
-CACERT=$(cat ./cluster/${NODEGROUP_NAME}/ca.cert)
+MASTER_IP=$(cat ${TARGET_CLUSTER_LOCATION}/manager-ip)
+TOKEN=$(cat ${TARGET_CLUSTER_LOCATION}/token)
+CACERT=$(cat ${TARGET_CLUSTER_LOCATION}/ca.cert)
 
-kubectl create secret tls kube-system -n kube-system --key ./etc/ssl/privkey.pem --cert ./etc/ssl/fullchain.pem --kubeconfig=./cluster/${NODEGROUP_NAME}/config
-kubectl create secret generic autoscaler-ssh-keys -n kube-system --from-file=id_rsa="${SSH_PRIVATE_KEY}" --from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" --kubeconfig=./cluster/${NODEGROUP_NAME}/config
+kubectl create secret tls kube-system -n kube-system --key ${SSL_LOCATION}/privkey.pem --cert ${SSL_LOCATION}/fullchain.pem --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
+kubectl create secret generic autoscaler-ssh-keys -n kube-system --from-file=id_rsa="${SSH_PRIVATE_KEY}" --from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 
-kubeconfig-merge.sh ${MASTERKUBE} cluster/${NODEGROUP_NAME}/config
+kubeconfig-merge.sh ${MASTERKUBE} ${TARGET_CLUSTER_LOCATION}/config
 
 echo_title "Write vsphere autoscaler provider config"
 
 echo $(eval "cat <<EOF
 $(<./templates/cluster/grpc-config.json)
-EOF") | jq . >./config/${NODEGROUP_NAME}/grpc-config.json
+EOF") | jq . >${TARGET_CONFIG_LOCATION}/grpc-config.json
 
 if [ "${GOVC_INSECURE}" == "1" ]; then
     INSECURE=true
@@ -1095,7 +1322,7 @@ fi
 
 AUTOSCALER_CONFIG=$(cat <<EOF
 {
-    "use-external-etcd": $EXTERNAL_ETCD,
+    "use-external-etcd": ${EXTERNAL_ETCD},
     "src-etcd-ssl-dir": "/etc/etcd/ssl",
     "dst-etcd-ssl-dir": "${ETCD_DST_DIR}",
     "kubernetes-pki-srcdir": "/etc/kubernetes/pki",
@@ -1176,7 +1403,9 @@ AUTOSCALER_CONFIG=$(cat <<EOF
                         "adapter": "vmxnet3",
                         "mac-address": "generate",
                         "nic": "eth0",
-                        "dhcp": true
+                        "dhcp": true,
+                        "use-dhcp-routes": ${USE_DHCP_ROUTES_PUBLIC},
+                        "routes": ${PUBLIC_ROUTES_DEFS}
                     },
                     {
                         "primary": true,
@@ -1186,9 +1415,11 @@ AUTOSCALER_CONFIG=$(cat <<EOF
                         "mac-address": "generate",
                         "nic": "eth1",
                         "dhcp": ${SCALEDNODES_DHCP},
+                        "use-dhcp-routes": ${USE_DHCP_ROUTES_PRIVATE},
                         "address": "${NODE_IP}",
                         "gateway": "${NET_GATEWAY}",
-                        "netmask": "${NET_MASK}"
+                        "netmask": "${NET_MASK}",
+                        "routes": ${PRIVATE_ROUTES_DEFS}
                     }
                 ]
             }
@@ -1198,19 +1429,35 @@ AUTOSCALER_CONFIG=$(cat <<EOF
 EOF
 )
 
-echo "$AUTOSCALER_CONFIG" | jq . > config/${NODEGROUP_NAME}/kubernetes-vmware-autoscaler.json
+echo "$AUTOSCALER_CONFIG" | jq . > ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
 
 # Recopy config file on master node
-kubectl create configmap config-cluster-autoscaler --kubeconfig=./cluster/${NODEGROUP_NAME}/config -n kube-system \
-	--from-file ./config/${NODEGROUP_NAME}/grpc-config.json \
-	--from-file ./config/${NODEGROUP_NAME}/kubernetes-vmware-autoscaler.json
+kubectl create configmap config-cluster-autoscaler --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
+	--from-file ${TARGET_CONFIG_LOCATION}/grpc-config.json \
+	--from-file ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
 
 # Create Pods
 create-metallb.sh
+
+echo_title "= Create CERT Manager"
+create-cert-manager.sh
+
+echo_title "= Create NFS provisionner"
+create-nfs-provisionner.sh
+
+echo_title "= Create Ingress Controller"
 create-ingress-controller.sh
+
+echo_title "= Create Kubernetes dashboard"
 create-dashboard.sh
+
+echo_title "= Create Kubernetes metric scraper"
 create-metrics.sh
+
+echo_title "= Create Sample hello"
 create-helloworld.sh
+
+echo_title "= Create External DNS"
 create-external-dns.sh
 
 if [ "$LAUNCH_CA" != "NO" ]; then
@@ -1219,24 +1466,24 @@ fi
 
 NGINX_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
-sudo $SED -i -e "/masterkube-vmware-dashboard.${DOMAIN_NAME}/d" /etc/hosts
-sudo bash -c "echo '${NGINX_IP} masterkube-vmware.${DOMAIN_NAME} masterkube-vmware-dashboard.${DOMAIN_NAME}' >> /etc/hosts"
+sudo $SED -i -e "/masterkube-vmware/d" /etc/hosts
+sudo bash -c "echo '${NGINX_IP} masterkube-vmware.${DOMAIN_NAME} ${DASHBOARD_HOSTNAME}.${DOMAIN_NAME}' >> /etc/hosts"
 
 # Add cluster config in configmap
-kubectl create configmap masterkube-config --kubeconfig=./cluster/${NODEGROUP_NAME}/config -n kube-system \
-	--from-file ./cluster/${NODEGROUP_NAME}/ca.cert \
-    --from-file ./cluster/${NODEGROUP_NAME}/dashboard-token \
-    --from-file ./cluster/${NODEGROUP_NAME}/token
+kubectl create configmap masterkube-config --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
+	--from-file ${TARGET_CLUSTER_LOCATION}/ca.cert \
+    --from-file ${TARGET_CLUSTER_LOCATION}/dashboard-token \
+    --from-file ${TARGET_CLUSTER_LOCATION}/token
 
-kubectl create configmap kubernetes-pki --kubeconfig=./cluster/${NODEGROUP_NAME}/config -n kube-system \
-	--from-file ./cluster/${NODEGROUP_NAME}/kubernetes/pki
+kubectl create configmap kubernetes-pki --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
+	--from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki
 
-if [ "$EXTERNAL_ETCD" = "true" ]; then
-    kubectl create secret generic etcd-ssl --kubeconfig=./cluster/${NODEGROUP_NAME}/config -n kube-system \
-        --from-file ./cluster/${NODEGROUP_NAME}/etcd/ssl
+if [ "${EXTERNAL_ETCD}" = "true" ]; then
+    kubectl create secret generic etcd-ssl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
+        --from-file ${TARGET_CLUSTER_LOCATION}/etcd/ssl
 else
-    kubectl create secret generic etcd-ssl --kubeconfig=./cluster/${NODEGROUP_NAME}/config -n kube-system \
-        --from-file ./cluster/${NODEGROUP_NAME}/kubernetes/pki/etcd
+    kubectl create secret generic etcd-ssl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
+        --from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki/etcd
 fi
 
 popd
