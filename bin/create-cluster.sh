@@ -29,6 +29,9 @@ CONTAINER_ENGINE=docker
 CONTAINER_RUNTIME=docker
 CONTAINER_CTL=/var/run/dockershim.sock
 K8_OPTIONS="--ignore-preflight-errors=All --config=${KUBEADM_CONFIG}"
+VMUUID=
+CSI_REGION=home
+CSI_ZONE=office
 
 if [ "$(uname -p)" == "aarch64" ];  then
 	ARCH="arm64"
@@ -36,7 +39,7 @@ else
 	ARCH="amd64"
 fi
 
-TEMP=$(getopt -o xm:g:r:i:c:n:k: --long allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
+TEMP=$(getopt -o xm:g:r:i:c:n:k: --long csi-region:,csi-zone:,vm-uuid:,allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -53,6 +56,10 @@ while true; do
         ;;
     -g|--node-group)
         NODEGROUP_NAME="$2"
+        shift 2
+        ;;
+    --vm-uuid)
+        VMUUID=$2
         shift 2
         ;;
     --allow-deployment)
@@ -125,6 +132,14 @@ while true; do
         shift 2
         ;;
 
+    --csi-region)
+        CSI_REGION=$2
+        shift 2
+        ;;
+    --csi-zone)
+        CSI_ZONE=$2
+        shift 2
+        ;;
     --)
         shift
         break
@@ -389,20 +404,25 @@ elif [ "$CNI_PLUGIN" = "romana" ]; then
 
 fi
 
-cat > patch.yaml <<EOF
-spec:
-    providerID: '${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}'
-EOF
+#cat > patch.yaml <<EOF
+#spec:
+#    providerID: '${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}'
+#EOF
 
-kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+#kubectl patch node ${HOSTNAME} --patch-file patch.yaml
 
-kubectl label nodes ${HOSTNAME} "cluster.autoscaler.nodegroup/name=${NODEGROUP_NAME}" \
+kubectl label nodes ${HOSTNAME} \
     "node-role.kubernetes.io/master=" \
+    "topology.kubernetes.io/region=${CSI_REGION}" \
+    "topology.kubernetes.io/zone=${CSI_ZONE}" \
+    "topology.csi.vmware.com/k8s-region=${CSI_REGION}" \
+    "topology.csi.vmware.com/k8s-zone=${CSI_ZONE}" \
     "master=true" --overwrite
 
 kubectl annotate node ${HOSTNAME} \
     "cluster.autoscaler.nodegroup/name=${NODEGROUP_NAME}" \
     "cluster.autoscaler.nodegroup/node-index=${NODEINDEX}" \
+    "cluster.autoscaler.nodegroup/instance-id=${VMUUID}" \
     "cluster.autoscaler.nodegroup/autoprovision=false" \
     "cluster-autoscaler.kubernetes.io/scale-down-disabled=true" \
     --overwrite

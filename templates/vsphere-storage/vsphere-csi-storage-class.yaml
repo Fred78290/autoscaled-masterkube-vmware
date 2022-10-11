@@ -1,0 +1,13 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: vsphere-csi-storage-class
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: csi.vsphere.vmware.com
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+parameters:
+#  storagepolicyname: "vSAN Default Storage Policy"  #Optional Parameter
+#  datastoreurl: "ds:///vmfs/volumes/609c424c-7e981880-d257-6cb3110fd06a/" #Optional Parameter
+  csi.storage.k8s.io/fstype: "xfs" #Optional Parameter

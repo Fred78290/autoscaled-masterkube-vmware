@@ -17,8 +17,11 @@ NET_IF=$(ip route get 1|awk '{print $5;exit}')
 MASTER_IP=$(cat ./cluster/manager-ip)
 TOKEN=$(cat ./cluster/token)
 CACERT=$(cat ./cluster/ca.cert)
+VMUUID=
+CSI_REGION=home
+CSI_ZONE=office
 
-TEMP=$(getopt -o i:g:c:n: --long net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+TEMP=$(getopt -o i:g:c:n: --long csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -42,6 +45,10 @@ while true; do
         CLUSTER_NODES="$2"
         shift 2
         ;;
+    --vm-uuid)
+        VMUUID=$2
+        shift 2
+        ;;
     --control-plane)
         HA_CLUSTER=$2
         shift 2
@@ -60,6 +67,14 @@ while true; do
         ;;
     --net-if)
         NET_IF=$2
+        shift 2
+        ;;
+    --csi-region)
+        CSI_REGION=$2
+        shift 2
+        ;;
+    --csi-zone)
+        CSI_ZONE=$2
         shift 2
         ;;
     --)
@@ -133,17 +148,20 @@ fi
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
-cat > patch.yaml <<EOF
-spec:
-    providerID: '${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}'
-EOF
+#cat > patch.yaml <<EOF
+#spec:
+#    providerID: '${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}'
+#EOF
 
-kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+#kubectl patch node ${HOSTNAME} --patch-file patch.yaml
 
 if [ "$HA_CLUSTER" = "true" ]; then
     kubectl label nodes ${HOSTNAME} \
-        "cluster.autoscaler.nodegroup/name=${NODEGROUP_NAME}" \
         "node-role.kubernetes.io/master=${ANNOTE_MASTER}" \
+        "topology.kubernetes.io/region=${CSI_REGION}" \
+        "topology.kubernetes.io/zone=${CSI_ZONE}" \
+        "topology.csi.vmware.com/k8s-region=${CSI_REGION}" \
+        "topology.csi.vmware.com/k8s-zone=${CSI_ZONE}" \
         "master=true" \
         --overwrite
 
@@ -152,8 +170,11 @@ if [ "$HA_CLUSTER" = "true" ]; then
     fi
 else
     kubectl label nodes ${HOSTNAME} \
-        "cluster.autoscaler.nodegroup/name=${NODEGROUP_NAME}" \
         "node-role.kubernetes.io/worker=" \
+        "topology.kubernetes.io/region=${CSI_REGION}" \
+        "topology.kubernetes.io/zone=${CSI_ZONE}" \
+        "topology.csi.vmware.com/k8s-region=${CSI_REGION}" \
+        "topology.csi.vmware.com/k8s-zone=${CSI_ZONE}" \
         "worker=true" \
         --overwrite
 fi
@@ -162,5 +183,6 @@ kubectl annotate node ${HOSTNAME} \
     "cluster.autoscaler.nodegroup/name=${NODEGROUP_NAME}" \
     "cluster.autoscaler.nodegroup/node-index=${NODEINDEX}" \
     "cluster.autoscaler.nodegroup/autoprovision=false" \
+    "cluster.autoscaler.nodegroup/instance-id=${VMUUID}" \
     "cluster-autoscaler.kubernetes.io/scale-down-disabled=true" \
     --overwrite

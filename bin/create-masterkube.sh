@@ -99,6 +99,8 @@ export GOVC_PASSWORD=
 export GOVC_RESOURCE_POOL=
 export GOVC_URL=
 export GOVC_VIM_VERSION="6.0"
+export GOVC_REGION=home
+export GOVC_ZONE=office
 
 # Sample machine definition
 MACHINE_DEFS=$(cat ${PWD}/templates/machines.json)
@@ -1183,8 +1185,9 @@ do
         echo_title "Already prepared VM $MASTERKUBE_NODE"
     else
         IPADDR="${IPADDRS[$INDEX]}"
+        VMUUID=$(govc vm.info -json ${MASTERKUBE_NODE} | jq -r '.VirtualMachines[0].Config.Uuid//""')
 
-        echo_title "Prepare VM ${MASTERKUBE_NODE} with IP:${IPADDR}"
+        echo_title "Prepare VM ${MASTERKUBE_NODE}, UUID=${VMUUID} with IP:${IPADDR}"
 
         eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ $SILENT
         eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin $SILENT
@@ -1201,6 +1204,9 @@ do
                 echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} single instance master node, kubernetes version=${KUBERNETES_VERSION}"
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
+                    --vm-uuid=${VMUUID} \
+                    --csi-region=${GOVC_REGION} \
+                    --csi-zone=${GOVC_ZONE} \
                     --max-pods=${MAX_PODS} \
                     --allow-deployment=${MASTER_NODE_ALLOW_DEPLOYMENT} \
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
@@ -1226,6 +1232,9 @@ do
                 echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} instance master node number ${INDEX}, kubernetes version=${KUBERNETES_VERSION}"
 
                 ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
+                    --vm-uuid=${VMUUID} \
+                    --csi-region=${GOVC_REGION} \
+                    --csi-zone=${GOVC_ZONE} \
                     --max-pods=${MAX_PODS} \
                     --allow-deployment=${MASTER_NODE_ALLOW_DEPLOYMENT} \
                     --container-runtime=${CONTAINER_ENGINE} \
@@ -1259,6 +1268,9 @@ do
                     eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
                     eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
+                        --vm-uuid=${VMUUID} \
+                        --csi-region=${GOVC_REGION} \
+                        --csi-zone=${GOVC_ZONE} \
                         --use-external-etcd=${EXTERNAL_ETCD} \
                         --node-group=${NODEGROUP_NAME} \
                         --node-index=${NODEINDEX} \
@@ -1271,6 +1283,9 @@ do
                 eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
+                    --vm-uuid=${VMUUID} \
+                    --csi-region=${GOVC_REGION} \
+                    --csi-zone=${GOVC_ZONE} \
                     --allow-deployment=${MASTER_NODE_ALLOW_DEPLOYMENT} \
                     --use-external-etcd=${EXTERNAL_ETCD} \
                     --node-group=${NODEGROUP_NAME} \
@@ -1357,6 +1372,12 @@ AUTOSCALER_CONFIG=$(cat <<EOF
     },
     "default-machine": "${DEFAULT_MACHINE}",
     "machines": ${MACHINE_DEFS},
+    "node-labels": [
+        "topology.kubernetes.io/region=${GOVC_REGION}",
+        "topology.kubernetes.io/zone=${GOVC_ZONE}",
+        "topology.csi.vmware.com/k8s-region=${GOVC_REGION}",
+        "topology.csi.vmware.com/k8s-zone=${GOVC_ZONE}"
+    ],
     "cloud-init": {
         "package_update": false,
         "package_upgrade": false,
@@ -1437,6 +1458,10 @@ kubectl create configmap config-cluster-autoscaler --kubeconfig=${TARGET_CLUSTER
 	--from-file ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
 
 # Create Pods
+echo_title "= Create VSphere CSI provisionner"
+create-vsphere-provisionner.sh
+
+echo_title "= Create MetalLB"
 create-metallb.sh
 
 echo_title "= Create CERT Manager"
