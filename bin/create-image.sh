@@ -106,13 +106,12 @@ EOF
 # If you have the bug "unsupported server", you must do it manually!
 if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
     [ -f ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.ova ] || wget https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-${SEED_ARCH}.ova -O ${CACHE}/focal-server-cloudimg-amd64.ova
-        
-    MAPPED_NETWORK=$(govc import.spec ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.ova | jq .NetworkMapping[0].Name | tr -d '"')
 
     if [ "${IMPORTMODE}" == "govc" ]; then
-
         govc import.spec ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.ova \
-            | jq --arg GOVC_NETWORK "${PRIMARY_NETWORK_NAME}" --arg MAPPED_NETWORK "${MAPPED_NETWORK}" '.NetworkMapping |= [ { Name: $MAPPED_NETWORK, Network: $GOVC_NETWORK } ]' \
+            | jq \
+                --arg GOVC_NETWORK "${PRIMARY_NETWORK_NAME}" \
+                '.NetworkMapping = [ { Name: $GOVC_NETWORK, Network: $GOVC_NETWORK } ]' \
             > ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.spec
         
         cat ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.spec \
@@ -126,13 +125,8 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
                 '.Name = $NAME | .PropertyMapping |= [ { Key: "instance-id", Value: $INSTANCEID }, { Key: "hostname", Value: $TARGET_IMAGE }, { Key: "public-keys", Value: $SSH_KEY }, { Key: "user-data", Value: $USERDATA }, { Key: "password", Value: $PASSWORD } ]' \
                 > ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.txt
 
-        if [ -z "${GOVC_CLUSTER}" ]; then
-            DATASTORE="/${GOVC_DATACENTER}/datastore/${GOVC_DATASTORE}"
-            FOLDER="/${GOVC_DATACENTER}/vm/${GOVC_FOLDER}"
-        else
-            DATASTORE="/${GOVC_DATACENTER}/datastore/${GOVC_CLUSTER}/CUSTOMER/${GOVC_FOLDER}/${GOVC_DATASTORE}"
-            FOLDER="/${GOVC_DATACENTER}/vm/${GOVC_FOLDER}"
-        fi
+        DATASTORE="/${GOVC_DATACENTER}/datastore/${GOVC_DATASTORE}"
+        FOLDER="/${GOVC_DATACENTER}/vm/${GOVC_FOLDER}"
 
         echo "Import focal-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with govc"
         govc import.ova \
@@ -143,6 +137,8 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
             ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.ova
     else
         echo "Import focal-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with ovftool"
+
+        MAPPED_NETWORK=$(govc import.spec ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.ova | jq .NetworkMapping[0].Name | tr -d '"')
 
         ovftool \
             --acceptAllEulas \
@@ -175,6 +171,7 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         fi
 
         echo "Power On ${SEEDIMAGE}"
+        govc vm.upgrade -version=17 -vm ${SEEDIMAGE}
         govc vm.power -on "${SEEDIMAGE}"
 
         echo "Wait for IP from $SEEDIMAGE"
@@ -187,10 +184,16 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
 
         # Prepare seed VM
         echo "Install cloud-init VMWareGuestInfo datasource"
-        scp "${CURDIR}/../guestinfos/install-guestinfo-datasource.sh" "${CURDIR}/../guestinfos/cloud-init-clean.sh" "${USER}@${IPADDR}:/tmp"
-        ssh -t "${USER}@${IPADDR}" sudo mv /tmp/cloud-init-clean.sh /tmp/install-guestinfo-datasource.sh /usr/local/bin
-        ssh -t "${USER}@${IPADDR}" sudo /usr/local/bin/install-guestinfo-datasource.sh
+        #scp "${CURDIR}/../guestinfos/install-guestinfo-datasource.sh" "${CURDIR}/../guestinfos/cloud-init-clean.sh" "${USER}@${IPADDR}:/tmp"
+        #ssh -t "${USER}@${IPADDR}" sudo mv /tmp/cloud-init-clean.sh /tmp/install-guestinfo-datasource.sh /usr/local/bin
+        #ssh -t "${USER}@${IPADDR}" sudo /usr/local/bin/install-guestinfo-datasource.sh
 
+        ssh -t "${USER}@${IPADDR}" "curl -sSL https://raw.githubusercontent.com/vmware/cloud-init-vmware-guestinfo/master/install.sh | sudo bash"
+        echo "clean cloud-init"
+        ssh -t "${USER}@${IPADDR}" sudo cloud-init clean
+        ssh -t "${USER}@${IPADDR}" sudo cloud-init clean -l
+        ssh -t "${USER}@${IPADDR}" sudo shutdown -h now
+        
         # Shutdown the guest
         govc vm.power -persist-session=false -s "${SEEDIMAGE}"
 
@@ -259,6 +262,9 @@ KUBERNETES_MINOR_RELEASE=${KUBERNETES_MINOR_RELEASE}
 CRIO_VERSION=${CRIO_VERSION}
 CONTAINER_ENGINE=${CONTAINER_ENGINE}
 CONTAINER_CTL=${CONTAINER_CTL}
+
+sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"/' /etc/default/grub
+update-grub
 
 echo "==============================================================================================================================="
 echo "= Upgrade ubuntu distro"
@@ -453,7 +459,7 @@ ExecStart=
 ExecStart=/usr/local/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
 SHELL
 
-echo 'KUBELET_EXTRA_ARGS="--fail-swap-on=false --read-only-port=10255"' > /etc/default/kubelet
+echo 'KUBELET_EXTRA_ARGS="--cloud-provider=external --fail-swap-on=false --read-only-port=10255"' > /etc/default/kubelet
 
 apt dist-upgrade -y
 apt autoremove -y
@@ -513,6 +519,7 @@ rm -rf /etc/cni/net.d/*
 [ -f /etc/cloud/cloud.cfg.d/50-curtin-networking.cfg ] && rm /etc/cloud/cloud.cfg.d/50-curtin-networking.cfg
 rm /etc/netplan/*
 cloud-init clean
+cloud-init clean -l
 
 rm -rf /etc/apparmor.d/cache/* /etc/apparmor.d/cache/.features
 /usr/bin/truncate --size 0 /etc/machine-id
@@ -544,6 +551,7 @@ fi
 govc vm.clone -on=false ${FOLDER_OPTIONS} -c=2 -m=4096 -vm=${SEEDIMAGE} ${TARGET_IMAGE}
 
 govc vm.change -vm "${TARGET_IMAGE}" \
+    -e disk.enableUUID=1 \
     -e guestinfo.metadata="$(cat ${CACHE}/metadata.base64)" \
     -e guestinfo.metadata.encoding="gzip+base64" \
     -e guestinfo.userdata="$(cat ${CACHE}/userdata.base64)" \
