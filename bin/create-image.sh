@@ -99,10 +99,19 @@ fi
 
 echo "Ubuntu password:$PASSWORD"
 
+BOOTSTRAP_PASSWORD=$(uuidgen)
+IFS=@ read -a VCENTER <<<$(echo $GOVC_URL | awk -F/ '{print $3}')
+VCENTER=${VCENTER[-1]}
+
 USERDATA=$(base64 <<EOF
 #cloud-config
-password: $PASSWORD
-chpasswd: { expire: false }
+password: $BOOTSTRAP_PASSWORD
+chpasswd: 
+  expire: false
+  users:
+    - name: ubuntu
+      password: $PASSWORD
+      type: text
 ssh_pwauth: true
 EOF
 )
@@ -121,11 +130,11 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
                 '.NetworkMapping = [ { Name: $GOVC_NETWORK, Network: $GOVC_NETWORK } ]' \
             > ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.spec
         
-        cat ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.spec \
+        cat ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.spec \
             | jq --arg SSH_KEY "${SSH_KEY}" \
                 --arg SSH_KEY "${SSH_KEY}" \
                 --arg USERDATA "${USERDATA}" \
-                --arg PASSWORD "${PASSWORD}" \
+                --arg PASSWORD "${BOOTSTRAP_PASSWORD}" \
                 --arg NAME "${SEEDIMAGE}" \
                 --arg INSTANCEID $(uuidgen) \
                 --arg TARGET_IMAGE "$TARGET_IMAGE" \
