@@ -17,30 +17,17 @@ export CLUSTER_AUTOSCALER_VERSION=v1.22.1
 export VSPHERE_AUTOSCALER_VERSION=v1.22.5
 
 case $KUBERNETES_MINOR_RELEASE in
-    20)
-        CLUSTER_AUTOSCALER_VERSION=v1.20.5
-        VSPHERE_AUTOSCALER_VERSION=v1.20.14
-        ;;
-    21)
-        CLUSTER_AUTOSCALER_VERSION=v1.21.8
-        VSPHERE_AUTOSCALER_VERSION=v1.21.8
-        ;;
-    22)
-        CLUSTER_AUTOSCALER_VERSION=v1.22.5
-        VSPHERE_AUTOSCALER_VERSION=v1.22.5
-        ;;
-    23)
-        CLUSTER_AUTOSCALER_VERSION=v1.23.8
-        VSPHERE_AUTOSCALER_VERSION=v1.23.8
-        ;;
     24)
         CLUSTER_AUTOSCALER_VERSION=v1.24.2
-        VSPHERE_AUTOSCALER_VERSION=v1.24.3
+        VSPHERE_AUTOSCALER_VERSION=v1.24.6
         ;;
     25)
         CLUSTER_AUTOSCALER_VERSION=v1.25.2
         VSPHERE_AUTOSCALER_VERSION=v1.25.2
         ;;
+    *)
+        echo "Former version aren't supported by vmware autoscaler"
+        exit 1
 esac
 
 mkdir -p $ETC_DIR
