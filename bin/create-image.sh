@@ -165,15 +165,15 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
             --prop:instance-id="$(uuidgen)" \
             --prop:hostname="${SEEDIMAGE}" \
             --prop:public-keys="${SSH_KEY}" \
-            --prop:user-data="" \
-            --prop:password="${PASSWORD}" \
+            --prop:user-data="${USERDATA}" \
+            --prop:password="${BOOTSTRAP_PASSWORD}" \
             --net:"${MAPPED_NETWORK}"="${PRIMARY_NETWORK_NAME}" \
             https://cloud-images.ubuntu.com/${DISTRO}/current/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova \
             "vi://${GOVC_USERNAME}:${GOVC_PASSWORD}@${VCENTER}/${GOVC_RESOURCE_POOL}/"
     fi
 
     if [ $? -eq 0 ]; then
-    
+
         if [ ! -z "${PRIMARY_NETWORK_ADAPTER}" ];then
             echo "Change primary network card ${PRIMARY_NETWORK_NAME} to ${PRIMARY_NETWORK_ADAPTER} on ${SEEDIMAGE}"
 
