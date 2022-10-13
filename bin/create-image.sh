@@ -211,7 +211,13 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         # Shutdown the guest
         govc vm.power -persist-session=false -s "${SEEDIMAGE}"
 
-        sleep 10
+        echo "Wait ${SEEDIMAGE} to shutdown"
+        while [ $(govc vm.info -json "${SEEDIMAGE}" | jq .VirtualMachines[0].Runtime.PowerState | tr -d '"') == "poweredOn" ]
+        do
+            echo -n "."
+            sleep 1
+        done
+        echo
 
         echo "${SEEDIMAGE} is ready"
     else
