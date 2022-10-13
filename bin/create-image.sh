@@ -4,7 +4,7 @@
 
 # This script will create 2 VM used as template
 # The first one is the seed VM customized to use vmware guestinfos cloud-init datasource instead ovf datasource.
-# This step is done by importing https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.ova
+# This step is done by importing https://cloud-images.ubuntu.com/${DISTRO}/current/${DISTRO}-server-cloudimg-amd64.ova
 # If don't have the right to import OVA with govc to your vpshere you can try with ovftool import method else you must build manually this seed
 # Jump to Prepare seed VM comment.
 # Very important, shutdown the seed VM by using shutdown guest or shutdown -P now. Never use PowerOff vsphere command
@@ -12,14 +12,15 @@
 
 # The second VM will contains everything to run kubernetes
 
+DISTRO=jammy
 KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
 CNI_PLUGIN_VERSION=v1.1.1
 SSH_KEY=$(cat ~/.ssh/id_rsa.pub)
 CACHE=~/.local/vmware/cache
-TARGET_IMAGE=focal-kubernetes-$KUBERNETES_VERSION
+TARGET_IMAGE=${DISTRO}-kubernetes-$KUBERNETES_VERSION
 PASSWORD=$(uuidgen)
 OSDISTRO=$(uname -s)
-SEEDIMAGE=focal-server-cloudimg-seed
+SEEDIMAGE=${DISTRO}-server-cloudimg-seed
 IMPORTMODE="govc"
 CURDIR=$(dirname $0)
 USER=ubuntu
@@ -44,13 +45,19 @@ fi
 mkdir -p $ISODIR
 mkdir -p $CACHE
 
-TEMP=`getopt -o a:i:k:n:op:s:u:v: --long arch:,container-runtime:,user:,adapter:,primary-adapter:,primary-network:,second-adapter:,second-network:,ovftool,seed:,custom-image:,ssh-key:,cni-version:,password:,kubernetes-version: -n "$0" -- "$@"`
+TEMP=`getopt -o d:a:i:k:n:op:s:u:v: --long distribution:,arch:,container-runtime:,user:,adapter:,primary-adapter:,primary-network:,second-adapter:,second-network:,ovftool,seed:,custom-image:,ssh-key:,cni-version:,password:,kubernetes-version: -n "$0" -- "$@"`
 eval set -- "$TEMP"
 
 # extract options and their arguments into variables.
 while true ; do
 	#echo "1:$1"
     case "$1" in
+        -d|--distribution)
+            DISTRO="$2"
+            TARGET_IMAGE=${DISTRO}-kubernetes-$KUBERNETES_VERSION
+            SEEDIMAGE=${DISTRO}-server-cloudimg-seed
+            shift 2
+            ;;
         -i|--custom-image) TARGET_IMAGE="$2" ; shift 2;;
         -k|--ssh-key) SSH_KEY=$2 ; shift 2;;
         -n|--cni-version) CNI_PLUGIN_VERSION=$2 ; shift 2;;
@@ -100,19 +107,19 @@ ssh_pwauth: true
 EOF
 )
 
-# If your seed image isn't present create one by import focal cloud ova.
+# If your seed image isn't present create one by import ${DISTRO} cloud ova.
 # If you don't have the access right to import with govc (firewall rules blocking https traffic to esxi),
 # you can try with ovftool to import the ova.
 # If you have the bug "unsupported server", you must do it manually!
 if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
-    [ -f ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.ova ] || wget https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-${SEED_ARCH}.ova -O ${CACHE}/focal-server-cloudimg-amd64.ova
+    [ -f ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova ] || wget https://cloud-images.ubuntu.com/${DISTRO}/current/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova -O ${CACHE}/${DISTRO}-server-cloudimg-amd64.ova
 
     if [ "${IMPORTMODE}" == "govc" ]; then
-        govc import.spec ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.ova \
+        govc import.spec ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova \
             | jq \
                 --arg GOVC_NETWORK "${PRIMARY_NETWORK_NAME}" \
                 '.NetworkMapping = [ { Name: $GOVC_NETWORK, Network: $GOVC_NETWORK } ]' \
-            > ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.spec
+            > ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.spec
         
         cat ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.spec \
             | jq --arg SSH_KEY "${SSH_KEY}" \
@@ -123,22 +130,22 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
                 --arg INSTANCEID $(uuidgen) \
                 --arg TARGET_IMAGE "$TARGET_IMAGE" \
                 '.Name = $NAME | .PropertyMapping |= [ { Key: "instance-id", Value: $INSTANCEID }, { Key: "hostname", Value: $TARGET_IMAGE }, { Key: "public-keys", Value: $SSH_KEY }, { Key: "user-data", Value: $USERDATA }, { Key: "password", Value: $PASSWORD } ]' \
-                > ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.txt
+                > ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.txt
 
         DATASTORE="/${GOVC_DATACENTER}/datastore/${GOVC_DATASTORE}"
         FOLDER="/${GOVC_DATACENTER}/vm/${GOVC_FOLDER}"
 
-        echo "Import focal-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with govc"
+        echo "Import ${DISTRO}-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with govc"
         govc import.ova \
-            -options=${CACHE}/focal-server-cloudimg-${SEED_ARCH}.txt \
+            -options=${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.txt \
             -folder="${FOLDER}" \
             -ds="${DATASTORE}" \
             -name="${SEEDIMAGE}" \
-            ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.ova
+            ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova
     else
-        echo "Import focal-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with ovftool"
+        echo "Import ${DISTRO}-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with ovftool"
 
-        MAPPED_NETWORK=$(govc import.spec ${CACHE}/focal-server-cloudimg-${SEED_ARCH}.ova | jq .NetworkMapping[0].Name | tr -d '"')
+        MAPPED_NETWORK=$(govc import.spec ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova | jq .NetworkMapping[0].Name | tr -d '"')
 
         ovftool \
             --acceptAllEulas \
@@ -152,8 +159,8 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
             --prop:user-data="" \
             --prop:password="${PASSWORD}" \
             --net:"${MAPPED_NETWORK}"="${PRIMARY_NETWORK_NAME}" \
-            https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-${SEED_ARCH}.ova \
-            "vi://${GOVC_USERNAME}:${GOVC_PASSWORD}@${GOVC_HOST}/${GOVC_RESOURCE_POOL}/"
+            https://cloud-images.ubuntu.com/${DISTRO}/current/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova \
+            "vi://${GOVC_USERNAME}:${GOVC_PASSWORD}@${VCENTER}/${GOVC_RESOURCE_POOL}/"
     fi
 
     if [ $? -eq 0 ]; then

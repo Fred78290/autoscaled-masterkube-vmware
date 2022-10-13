@@ -13,7 +13,7 @@ CURDIR=$(dirname $0)
 pushd ${CURDIR}/../
 
 export PATH=${PWD}/bin:${PATH}
-
+export DISTRO=jammy
 export SCHEME="vmware"
 export NODEGROUP_NAME="vmware-ca-k8s"
 export MASTERKUBE="${NODEGROUP_NAME}-masterkube"
@@ -26,8 +26,8 @@ export KUBERNETES_PASSWORD=
 export KUBECONFIG=$HOME/.kube/config
 export SEED_ARCH=amd64
 export SEED_USER=ubuntu
-export SEED_IMAGE="focal-server-cloudimg-seed"
-export ROOT_IMG_NAME=focal-kubernetes
+export SEED_IMAGE="${DISTRO}-server-cloudimg-seed"
+export ROOT_IMG_NAME=${DISTRO}-kubernetes
 export CNI_PLUGIN=flannel
 export CNI_VERSION="v1.1.1"
 export USE_KEEPALIVED=NO
@@ -230,6 +230,7 @@ Options are:
 --trace | -x                                   # Trace execution
 --resume | -r                                  # Allow to resume interrupted creation of cluster kubernetes
 --delete                                       # Delete cluster and exit
+--distribution                                 # Ubuntu distribution to use ${DISTRO}
 --create-image-only                            # Create image only
 
 ### Flags to set some location informations
@@ -335,6 +336,12 @@ while true; do
     -h|--help)
         usage
         exit 0
+        ;;
+    --distribution)
+        DISTRO=$2
+        SEED_IMAGE="${DISTRO}-server-cloudimg-seed"
+        ROOT_IMG_NAME=${DISTRO}-kubernetes
+        shift 2
         ;;
     -v|--verbose)
         SILENT=
@@ -724,6 +731,7 @@ if [ -z "$(govc vm.info ${TARGET_IMAGE} 2>&1)" ]; then
 
     ./bin/create-image.sh \
         --password="${KUBERNETES_PASSWORD}" \
+        --distribution="${DISTRO}" \
         --cni-version="${CNI_VERSION}" \
         --custom-image="${TARGET_IMAGE}" \
         --kubernetes-version="${KUBERNETES_VERSION}" \
