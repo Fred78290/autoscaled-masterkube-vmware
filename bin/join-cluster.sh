@@ -1,5 +1,4 @@
 #!/bin/bash
-SCHEME="vmware"
 NODEGROUP_NAME="vmware-ca-k8s"
 MASTERKUBE="${NODEGROUP_NAME}-masterkube"
 CNI=flannel
@@ -148,12 +147,12 @@ fi
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
-#cat > patch.yaml <<EOF
-#spec:
-#    providerID: '${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}'
-#EOF
+cat > patch.yaml <<EOF
+spec:
+    providerID: 'vsphere://${VMUUID}'
+EOF
 
-#kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+kubectl patch node ${HOSTNAME} --patch-file patch.yaml
 
 if [ "$HA_CLUSTER" = "true" ]; then
     kubectl label nodes ${HOSTNAME} \

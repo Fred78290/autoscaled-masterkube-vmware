@@ -2,7 +2,6 @@
 
 set -e
 
-SCHEME="vmware"
 NODEGROUP_NAME="vmware-ca-k8s"
 CNI_PLUGIN=flannel
 NET_IF=$(ip route get 1|awk '{print $5;exit}')
@@ -404,12 +403,12 @@ elif [ "$CNI_PLUGIN" = "romana" ]; then
 
 fi
 
-#cat > patch.yaml <<EOF
-#spec:
-#    providerID: '${SCHEME}://${NODEGROUP_NAME}/object?type=node&name=${HOSTNAME}'
-#EOF
+cat > patch.yaml <<EOF
+spec:
+    providerID: 'vsphere://${VMUUID}'
+EOF
 
-#kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+kubectl patch node ${HOSTNAME} --patch-file patch.yaml
 
 kubectl label nodes ${HOSTNAME} \
     "node-role.kubernetes.io/master=" \
