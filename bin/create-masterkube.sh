@@ -1414,6 +1414,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
             "linked": false,
             "customization": "${GOVC_CUSTOMIZATION}",
             "network": {
+                "domain": "${NET_DOMAIN}",
                 "dns": {
                     "search": [
                         "${NET_DOMAIN}"
