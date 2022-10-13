@@ -191,11 +191,9 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
 
         # Prepare seed VM
         echo "Install cloud-init VMWareGuestInfo datasource"
-        #scp "${CURDIR}/../guestinfos/install-guestinfo-datasource.sh" "${CURDIR}/../guestinfos/cloud-init-clean.sh" "${USER}@${IPADDR}:/tmp"
-        #ssh -t "${USER}@${IPADDR}" sudo mv /tmp/cloud-init-clean.sh /tmp/install-guestinfo-datasource.sh /usr/local/bin
-        #ssh -t "${USER}@${IPADDR}" sudo /usr/local/bin/install-guestinfo-datasource.sh
 
-        ssh -t "${USER}@${IPADDR}" "curl -sSL https://raw.githubusercontent.com/vmware/cloud-init-vmware-guestinfo/master/install.sh | sudo bash"
+        ssh -t "${USER}@${IPADDR}" sudo "sh -c 'echo datasource_list: [ NoCloud, VMware, OVF ] > /etc/cloud/cloud.cfg.d/99-VMWare-Only.cfg'"
+
         echo "clean cloud-init"
         ssh -t "${USER}@${IPADDR}" sudo cloud-init clean
         ssh -t "${USER}@${IPADDR}" sudo cloud-init clean -l

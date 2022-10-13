@@ -923,6 +923,9 @@ function create_vm() {
         if [ "$PUBLIC_NODE_IP" = "DHCP" ]; then
             NETWORK_DEFS=$(cat <<EOF
             {
+                "instance-id": "$(uuidgen)",
+                "local-hostname": "${MASTERKUBE_NODE}",
+                "hostname": "${MASTERKUBE_NODE}.${NET_DOMAIN}",
                 "network": {
                     "version": 2,
                     "ethernets": {
@@ -946,6 +949,9 @@ EOF
         else
             NETWORK_DEFS=$(cat <<EOF
             {
+                "instance-id": "$(uuidgen)",
+                "local-hostname": "${MASTERKUBE_NODE}",
+                "hostname": "${MASTERKUBE_NODE}.${NET_DOMAIN}",
                 "network": {
                     "version": 2,
                     "ethernets": {
@@ -980,20 +986,12 @@ EOF
             NETWORK_DEFS=$(echo ${NETWORK_DEFS} | jq --argjson ROUTES "$PRIVATE_ROUTES_DEFS" '.network.ethernets.eth1.routes = $ROUTES')
         fi
 
-        echo ${NETWORK_DEFS} | jq . > ${TARGET_CONFIG_LOCATION}/network-$INDEX.json
-        echo ${NETWORK_DEFS} | yq -P - | tee > /dev/null > ${TARGET_CONFIG_LOCATION}/network-$INDEX.yaml
+        echo ${NETWORK_DEFS} | jq . > ${TARGET_CONFIG_LOCATION}/metadata-$INDEX.json
 
         # Cloud init meta-data
-        cat >${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.json <<EOF
-        {
-            "network": "$(cat ${TARGET_CONFIG_LOCATION}/network-${INDEX}.yaml | gzip -c9 | $BASE64)",
-            "network.encoding": "gzip+base64",
-            "local-hostname": "${MASTERKUBE_NODE}",
-            "instance-id": "$(uuidgen)"
-        }
-EOF
+        echo ${NETWORK_DEFS} | yq -P - | tee > /dev/null > ${TARGET_CONFIG_LOCATION}/metadata-$INDEX.yaml
 
-    # Cloud init user-data
+        # Cloud init user-data
         cat > ${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.yaml <<EOF
 #cloud-config
 runcmd:
