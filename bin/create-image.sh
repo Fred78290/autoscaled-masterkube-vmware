@@ -246,12 +246,12 @@ network:
             dhcp4: true
 EOF
 
-if [ ! -z "${SECOND_NETWORK_NAME}" ]; then
-cat > "${ISODIR}/network.yaml" <<EOF
-        eth1:
-            dhcp4: true
-EOF
-fi
+#if [ ! -z "${SECOND_NETWORK_NAME}" ]; then
+#cat >> "${ISODIR}/network.yaml" <<EOF
+#        eth1:
+#            dhcp4: true
+#EOF
+#fi
 
 cat > "${ISODIR}/vendor-data" <<EOF
 #cloud-config
