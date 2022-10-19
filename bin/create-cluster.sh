@@ -223,6 +223,7 @@ nodeRegistration:
   - effect: NoSchedule
     key: node-role.kubernetes.io/control-plane
   kubeletExtraArgs:
+    cloud-provider: external
     container-runtime: ${CONTAINER_RUNTIME}
     container-runtime-endpoint: ${CONTAINER_CTL}
 ---
@@ -276,12 +277,16 @@ networking:
   serviceSubnet: ${SERVICE_NETWORK_CIDR}
   podSubnet: ${POD_NETWORK_CIDR}
 scheduler: {}
+controllerManager:
+  extraArgs:
+    cloud-provider: external
 controlPlaneEndpoint: ${CONTROL_PLANE_ENDPOINT_HOST}:${APISERVER_ADVERTISE_PORT}
 dns:
   imageRepository: k8s.gcr.io/coredns
   imageTag: v1.9.3
 apiServer:
   extraArgs:
+    cloud-provider: external
     authorization-mode: Node,RBAC
   timeoutForControlPlane: 4m0s
   certSANs:
