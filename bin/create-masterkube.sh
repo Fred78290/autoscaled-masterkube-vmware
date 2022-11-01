@@ -730,6 +730,8 @@ if [ -z "$(govc vm.info ${TARGET_IMAGE} 2>&1)" ]; then
     echo_title "Create vmware preconfigured image ${TARGET_IMAGE}"
 
     ./bin/create-image.sh \
+        --aws-access-key=${AWS_ACCESSKEY} \
+        --aws-secret-key=${AWS_SECRETKEY} \
         --password="${KUBERNETES_PASSWORD}" \
         --distribution="${DISTRO}" \
         --cni-version="${CNI_VERSION}" \

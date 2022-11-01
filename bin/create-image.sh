@@ -45,7 +45,7 @@ fi
 mkdir -p $ISODIR
 mkdir -p $CACHE
 
-TEMP=`getopt -o d:a:i:k:n:op:s:u:v: --long distribution:,arch:,container-runtime:,user:,adapter:,primary-adapter:,primary-network:,second-adapter:,second-network:,ovftool,seed:,custom-image:,ssh-key:,cni-version:,password:,kubernetes-version: -n "$0" -- "$@"`
+TEMP=`getopt -o d:a:i:k:n:op:s:u:v: --long aws-access-key:,aws-secret-key:,distribution:,arch:,container-runtime:,user:,adapter:,primary-adapter:,primary-network:,second-adapter:,second-network:,ovftool,seed:,custom-image:,ssh-key:,cni-version:,password:,kubernetes-version: -n "$0" -- "$@"`
 eval set -- "$TEMP"
 
 # extract options and their arguments into variables.
@@ -87,6 +87,16 @@ while true ; do
                     ;;
             esac
             shift 2;;
+        
+        --aws-access-key)
+            AWS_ACCESS_KEY_ID=$2
+            shift 2
+            ;;
+        --aws-secret-key)
+            AWS_SECRET_ACCESS_KEY=$2
+            shift 2
+            ;;
+
         --) shift ; break ;;
         *) echo "$1 - Internal error!" ; exit 1 ;;
     esac
@@ -282,6 +292,8 @@ KUBERNETES_MINOR_RELEASE=${KUBERNETES_MINOR_RELEASE}
 CRIO_VERSION=${CRIO_VERSION}
 CONTAINER_ENGINE=${CONTAINER_ENGINE}
 CONTAINER_CTL=${CONTAINER_CTL}
+AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
 sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"/' /etc/default/grub
 update-grub
@@ -394,6 +406,8 @@ elif [ "${CONTAINER_ENGINE}" == "containerd" ]; then
 
     systemctl enable containerd.service
     systemctl restart containerd
+
+    curl -sL  https://github.com/containerd/nerdctl/releases/download/v1.0.0/nerdctl-1.0.0-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
 else
 
     echo "==============================================================================================================================="
@@ -447,6 +461,50 @@ echo "==========================================================================
 
 mkdir -p /etc/systemd/system/kubelet.service.d
 mkdir -p /var/lib/kubelet
+mkdir -p /etc/kubernetes
+
+if [ ! -z "${AWS_ACCESS_KEY_ID}" ] && [ ! -z "${AWS_SECRET_ACCESS_KEY}" ]; then
+
+    curl -sL https://github.com/Fred78290/aws-ecr-credential-provider/releases/download/v1.0.0/ecr-credential-provider-${SEED_ARCH} -o ecr-credential-provider
+    chmod +x /usr/local/bin/ecr-credential-provider
+
+    mkdir -p /root/.aws
+
+    cat > /root/.aws/config  <<SHELL
+[default]
+output = json
+region = us-east-1
+cli_binary_format=raw-in-base64-out
+SHELL
+
+    cat > /root/.aws/credentials  <<SHELL
+[default]
+aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+SHELL
+
+    cat > /etc/kubernetes/credential.yaml <<SHELL
+apiVersion: kubelet.config.k8s.io/v1alpha1
+kind: CredentialProviderConfig
+providers:
+  - name: ecr-credential-provider
+    matchImages:
+      - "*.dkr.ecr.*.amazonaws.com"
+      - "*.dkr.ecr.*.amazonaws.cn"
+      - "*.dkr.ecr-fips.*.amazonaws.com"
+      - "*.dkr.ecr.us-iso-east-1.c2s.ic.gov"
+      - "*.dkr.ecr.us-isob-east-1.sc2s.sgov.gov"
+    defaultCacheDuration: "12h"
+    apiVersion: credentialprovider.kubelet.k8s.io/v1alpha1
+    args:
+      - get-credentials
+    env:
+      - name: AWS_ACCESS_KEY_ID 
+        value: ${AWS_ACCESS_KEY_ID}
+      - name: AWS_SECRET_ACCESS_KEY
+        value: ${AWS_SECRET_ACCESS_KEY}
+SHELL
+fi
 
 cat > /etc/systemd/system/kubelet.service <<SHELL
 [Unit]
@@ -479,7 +537,11 @@ ExecStart=
 ExecStart=/usr/local/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
 SHELL
 
-echo 'KUBELET_EXTRA_ARGS="--cloud-provider=external --fail-swap-on=false --read-only-port=10255"' > /etc/default/kubelet
+if [ -z "${AWS_ACCESS_KEY_ID}" ] && [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
+    echo 'KUBELET_EXTRA_ARGS="--cloud-provider=external --fail-swap-on=false --read-only-port=10255"' > /etc/default/kubelet
+else
+    echo 'KUBELET_EXTRA_ARGS="--image-credential-provider-config=/etc/kubernetes/credential.yaml --image-credential-provider-bin-dir=/usr/local/bin/ --cloud-provider=external --fail-swap-on=false --read-only-port=10255"' > /etc/default/kubelet
+fi
 
 apt dist-upgrade -y
 apt autoremove -y
