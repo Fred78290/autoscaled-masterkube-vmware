@@ -311,19 +311,38 @@ Options are:
 EOF
 }
 
-if [ "$OSDISTRO" == "Linux" ]; then
-    TZ=$(cat /etc/timezone)
-    BASE64="base64 -w 0"
-    SED=sed
-else
-    TZ=$(sudo systemsetup -gettimezone | awk '{print $2}')
-    BASE64=base64
-    SED=gsed
-
-    if [ -z "$(command -v gsed)" ]; then
-        echo_red "Missing required command gsed"
+for MANDATORY in kubectl govc jq yq
+do
+    if [ -z "$(command -v $MANDATORY)" ]; then
+        echo_red "The command $MANDATORY is missing"
         exit 1
     fi
+done
+
+if [ "$OSDISTRO" == "Darwin" ]; then
+    if [ -z "$(command -v gsed)" ]; then
+        echo_red "You must install gnu sed with brew (brew install gsed), this script is not compatible with the native macos sed"
+        exit 1
+    fi
+
+    if [ -z "$(command -v gbase64)" ]; then
+        echo_red "You must install gnu base64 with brew (brew install coreutils), this script is not compatible with the native macos base64"
+        exit 1
+    fi
+
+    if [ ! -e /usr/local/opt/gnu-getopt/bin/getopt ]; then
+        echo_red "You must install gnu gnu-getop with brew (brew install coreutils), this script is not compatible with the native macos base64"
+        exit 1
+    fi
+
+    shopt -s expand_aliases
+    alias base64=gbase64
+    alias sed=gsed
+    alias getopt=/usr/local/opt/gnu-getopt/bin/getopt
+
+    TZ=$(sudo systemsetup -gettimezone | awk '{print $2}')
+else
+    TZ=$(cat /etc/timezone)
 fi
 
 TEMP=$(getopt -o xvheucrk:n:p:s:t: --long nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
@@ -860,7 +879,7 @@ system_info:
         name: ${KUBERNETES_USER}
 EOF
 
-gzip -c9 <${TARGET_CONFIG_LOCATION}/vendordata.yaml | $BASE64 | tee > ${TARGET_CONFIG_LOCATION}/vendordata.base64
+gzip -c9 <${TARGET_CONFIG_LOCATION}/vendordata.yaml | base64 -w 0 | tee > ${TARGET_CONFIG_LOCATION}/vendordata.base64
 
 IPADDRS=()
 NODE_IP=$NET_IP
@@ -873,7 +892,7 @@ fi
 
 # No external elb, use keep alived
 if [[ $FIRSTNODE > 0 ]]; then
-    sudo $SED -i -e "/${MASTERKUBE}/d" /etc/hosts
+    sudo sed -i -e "/${MASTERKUBE}/d" /etc/hosts
     sudo bash -c "echo '${NODE_IP} ${MASTERKUBE} ${MASTERKUBE}.${DOMAIN_NAME}' >> /etc/hosts"
 
     IPADDRS+=($NODE_IP)
@@ -1004,8 +1023,8 @@ runcmd:
 - echo "Create ${MASTERKUBE_NODE}" > /var/log/masterkube.log
 EOF
 
-        gzip -c9 <${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.json | $BASE64 | tee > ${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.base64
-        gzip -c9 <${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.yaml | $BASE64 | tee > ${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.base64
+        gzip -c9 <${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.json | base64 -w 0 | tee > ${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.base64
+        gzip -c9 <${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.yaml | base64 -w 0 | tee > ${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.base64
 
         MACHINE_TYPE=$(echo $MACHINE_DEFS | jq --arg MACHINE $MACHINE_TYPE 'to_entries[]|select(.key == $MACHINE)|.value')
         DISK_SIZE=$(echo $MACHINE_TYPE | jq -r .disksize)
@@ -1053,7 +1072,7 @@ EOF
         eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin $SILENT
 
         # Update /etc/hosts
-        sudo $SED -i -e "/${MASTERKUBE_NODE}/d" /etc/hosts
+        sudo sed -i -e "/${MASTERKUBE_NODE}/d" /etc/hosts
         sudo bash -c "echo '${NODE_IP} ${MASTERKUBE_NODE} ${MASTERKUBE_NODE}.${DOMAIN_NAME}' >> /etc/hosts"
     else
         echo_title "Already running ${MASTERKUBE_NODE} instance"
@@ -1501,7 +1520,7 @@ fi
 
 NGINX_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
-sudo $SED -i -e "/masterkube-vmware/d" /etc/hosts
+sudo sed -i -e "/masterkube-vmware/d" /etc/hosts
 sudo bash -c "echo '${NGINX_IP} masterkube-vmware.${DOMAIN_NAME} ${DASHBOARD_HOSTNAME}.${DOMAIN_NAME}' >> /etc/hosts"
 
 # Add cluster config in configmap

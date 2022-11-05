@@ -11,6 +11,13 @@ pushd ${CURDIR}/../
 CONFIGURATION_LOCATION=${PWD}
 GOVCDEFS=${PWD}/bin/govc.defs
 
+if [ "$OSDISTRO" == "Darwin" ]; then
+    shopt -s expand_aliases
+    alias base64=gbase64
+    alias sed=gsed
+    alias getopt=/usr/local/opt/gnu-getopt/bin/getopt
+fi
+
 TEMP=$(getopt -o fg:p:r: --long configuration-location:,govc-defs:,force,node-group:,profile:,region: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
@@ -73,12 +80,6 @@ if [ -f ${TARGET_CLUSTER_LOCATION}/buildenv ]; then
     source ${TARGET_CLUSTER_LOCATION}/buildenv
 fi
 
-if [ "$(uname -s)" == "Linux" ]; then
-    SED=sed
-else
-    SED=gsed
-fi
-
 if [ "$FORCE" = "YES" ]; then
     TOTALNODES=$((WORKERNODES + $CONTROLNODES))
 
@@ -99,7 +100,7 @@ if [ "$FORCE" = "YES" ]; then
             govc vm.destroy $MASTERKUBE_NODE
         fi
 
-        sudo $SED -i "/${MASTERKUBE_NODE}/d" /etc/hosts
+        sudo sed -i "/${MASTERKUBE_NODE}/d" /etc/hosts
     done
 elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
     for vm in $(kubectl get node -o json --kubeconfig ${TARGET_CLUSTER_LOCATION}/config | jq '.items| .[] | .metadata.labels["kubernetes.io/hostname"]')
@@ -110,7 +111,7 @@ elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
             govc vm.power -persist-session=false -s $vm
             govc vm.destroy $vm
         fi
-        sudo $SED -i "/${vm}/d" /etc/hosts
+        sudo sed -i "/${vm}/d" /etc/hosts
     done
 
     if [ ! -z "$(govc vm.info $MASTERKUBE 2>&1)" ]; then
@@ -130,7 +131,7 @@ rm -rf ${TARGET_CLUSTER_LOCATION}
 rm -rf ${TARGET_CONFIG_LOCATION}
 rm -rf ${TARGET_DEPLOY_LOCATION}
 
-sudo $SED -i "/${MASTERKUBE}/d" /etc/hosts
-sudo $SED -i "/masterkube-vmware/d" /etc/hosts
+sudo sed -i "/${MASTERKUBE}/d" /etc/hosts
+sudo sed -i "/masterkube-vmware/d" /etc/hosts
 
 popd

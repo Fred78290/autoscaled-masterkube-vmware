@@ -24,8 +24,8 @@ if [ -z "$(govc role.ls CNS-DATASTORE | grep 'Datastore.FileManagement')" ]; the
     done
 fi
 
-IFS=@ read -a VCENTER <<<$(echo $GOVC_URL | awk -F/ '{print $3}')
-VCENTER=${VCENTER[-1]}
+read -a VCENTER <<<"$(echo $GOVC_URL | awk -F/ '{print $3}' | tr '@' ' ')"
+VCENTER=${VCENTER[${#VCENTER[@]} - 1]}
 
 DATASTORE_URL=$(govc datastore.info -json | jq -r .Datastores[0].Info.Url)
 

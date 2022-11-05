@@ -67,7 +67,7 @@ kubectl get secrets -n $K8NAMESPACE --kubeconfig=${TARGET_CLUSTER_LOCATION}/conf
 # Show the contents of the secret to extract the token
 # kubectl describe secret my-dashboard-sa-token-xxxxx
 
-IFS=. read VERSION MAJOR MINOR <<<$KUBERNETES_VERSION
+IFS=. read VERSION MAJOR MINOR <<< "${KUBERNETES_VERSION}"
 
 if [ $MAJOR -gt 23 ]; then
     DASHBOARD_TOKEN=$(kubectl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config create token my-dashboard-sa -n $K8NAMESPACE --duration 86400h)

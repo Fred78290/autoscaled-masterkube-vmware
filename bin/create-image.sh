@@ -34,12 +34,15 @@ CONTAINER_CTL=docker
 
 if [ "$OSDISTRO" == "Linux" ]; then
     TZ=$(cat /etc/timezone)
-    BASE64='base64 -w 0'
     ISODIR=~/.local/vmware/cache
 else
     TZ=$(sudo systemsetup -gettimezone | awk '{print $2}')
-    BASE64=base64
     ISODIR=~/.local/vmware/cache/iso
+
+    shopt -s expand_aliases
+    alias base64=gbase64
+    alias sed=gsed
+    alias getopt=/usr/local/opt/gnu-getopt/bin/getopt
 fi
 
 mkdir -p $ISODIR
@@ -107,11 +110,16 @@ if [ ! -z "$(govc vm.info $TARGET_IMAGE 2>&1)" ]; then
     exit 0
 fi
 
+if [ ! -z "$(command -v gbase64)" ]; then
+    shopt -s expand_aliases
+    alias base64=gbase64
+fi
+
 echo "Ubuntu password:$PASSWORD"
 
 BOOTSTRAP_PASSWORD=$(uuidgen)
-IFS=@ read -a VCENTER <<<$(echo $GOVC_URL | awk -F/ '{print $3}')
-VCENTER=${VCENTER[-1]}
+read -a VCENTER <<<"$(echo $GOVC_URL | awk -F/ '{print $3}' | tr '@' ' ')"
+VCENTER=${VCENTER[${#VCENTER[@]} - 1]}
 
 USERDATA=$(base64 <<EOF
 #cloud-config
@@ -131,7 +139,7 @@ EOF
 # you can try with ovftool to import the ova.
 # If you have the bug "unsupported server", you must do it manually!
 if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
-    [ -f ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova ] || wget https://cloud-images.ubuntu.com/${DISTRO}/current/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova -O ${CACHE}/${DISTRO}-server-cloudimg-amd64.ova
+    [ -f ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova ] || curl -Ls https://cloud-images.ubuntu.com/${DISTRO}/current/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova -o ${CACHE}/${DISTRO}-server-cloudimg-amd64.ova
 
     if [ "${IMPORTMODE}" == "govc" ]; then
         govc import.spec ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova \
@@ -618,9 +626,9 @@ EOF
 
 chmod +x "${ISODIR}/prepare-image.sh"
 
-gzip -c9 < "${ISODIR}/meta-data" | $BASE64 > ${CACHE}/metadata.base64
-gzip -c9 < "${ISODIR}/user-data" | $BASE64 > ${CACHE}/userdata.base64
-gzip -c9 < "${ISODIR}/vendor-data" | $BASE64 > ${CACHE}/vendordata.base64
+gzip -c9 < "${ISODIR}/meta-data" | base64 -w 0 > ${CACHE}/metadata.base64
+gzip -c9 < "${ISODIR}/user-data" | base64 -w 0 > ${CACHE}/userdata.base64
+gzip -c9 < "${ISODIR}/vendor-data" | base64 -w 0 > ${CACHE}/vendordata.base64
 
 # Due to my vsphere center the folder name refer more path, so I need to precise the path instead
 if [ "${GOVC_FOLDER}" ]; then
