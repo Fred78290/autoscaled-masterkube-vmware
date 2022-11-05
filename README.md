@@ -15,9 +15,12 @@ You must also install
 |kubectl|kubectl|
 |govc|govc|
 |jq|jq|
+|yq|yq|
 ||gnu-getopt|
 ||gsed|
+||gbase64|
 
+For MacOS it's recommanded to install **homebrew** and install **Prerequistes** from **homebrew**
 ## Create the masterkube
 
 First step is to fill a file named **govc.defs** in the bin directory with the values needed by govc tool
@@ -36,6 +39,10 @@ export GOVC_RESOURCE_POOL=
 export GOVC_RESOURCE_POOL=
 export GOVC_URL=
 export GOVC_VIM_VERSION="6.0"
+
+# If you use cert-manager with a public domain
+export CERT_EMAIL=
+export PUBLIC_DOMAIN_NAME=
 ```
 
 The simply way to create the masterkube is to run [create-masterkube.sh](create-masterkube.sh)
@@ -75,8 +82,17 @@ During the process the script will create many files located in
 | `-v\|--verbose` | Verbose mode  | |
 | `-x\|--trace` | Trace execution  | |
 | `-r\|--resume` | Allow to resume interrupted creation of cluster kubernetes  | |
-| `--govc-defs` | Override the GOVC definitions  | bin/govc.defs |
+| `--delete` | Delete cluster and exit  | |
+| `--distribution` | Ubuntu distribution to use ${DISTRO}  | |
 | `--create-image-only`| Create image only and exit ||
+| **Flags to set some location informations** |
+| `--configuration-location` | Specify where configuration will be stored | current directory |
+| `--ssl-location` | Specify where the etc/ssl dir is stored | ./etc/ssl|
+| `--govc-defs` | Override the GOVC definitions  | bin/govc.defs |
+| **CERT Design domain** |
+| `--cert-email ` | Specify the mail for lets encrypt  | |
+| `--public-domain` | Specify the public domain to use  | |
+| `--dashboard-hostname` | Specify the hostname for kubernetes dashboard |masterkube-vmware-dashboard|
 | **Flag to design the kubernetes cluster** |
 | `-c\|--ha-cluster` | Allow to create an HA cluster with 3 control planes | NO |
 | `--worker-nodes` | Specify the number of worker node created in the cluster. | 3 |
@@ -105,8 +121,12 @@ During the process the script will create many files located in
 | `--net-address` | Override the IP of the kubernetes control plane node | 192.168.1.20 |
 | `--net-gateway` | The public IP gateway | 10.0.0.1 |
 | `--net-dns` | The public IP dns | 10.0.0.1 |
-| `--net-domain` | The public domain name | example.com |
+| `--net-domain` | The local domain name | example.com |
 | `--metallb-ip-range` | Override the metalb ip range | 10.0.0.100-10.0.0.127 |
+| `--dont-use-dhcp-routes-private` | Tell if we don't use DHCP routes in private network|
+| `--dont-use-dhcp-routes-public` | Tell if we don't use DHCP routes in public network|
+| `--add-route-private` | Add route to private network syntax is --add-route-private=to=X.X.X.X/YY,via=X.X.X.X,metric=100 --add-route-private=to=Y.Y.Y.Y/ZZ,via=X.X.X.X,metric=100|
+| `--add-route-public` | Add route to public network syntax is --add-route-public=to=X.X.X.X/YY,via=X.X.X.X,metric=100 --add-route-public=to=Y.Y.Y.Y/ZZ,via=X.X.X.X,metric=100|
 | **Flags for autoscaler** |
 | `--max-nodes-total` | Maximum number of nodes in all node groups. Cluster autoscaler will not grow the cluster beyond this number. | 9 |
 | `--cores-total` | Minimum and maximum number of cores in cluster, in the format < min >:< max >. Cluster autoscaler will not scale the cluster beyond these numbers. | 0:16 |
@@ -121,7 +141,7 @@ During the process the script will create many files located in
 | `--unremovable-node-recheck-timeout` | The timeout before we check again a node that couldn't be removed before | 1 minutes |
 
 ```bash
-create-masterkube \
+create-masterkube.sh \
     --verbose \
     --ha-cluster \
     --nodegroup=<My Group Name> \
