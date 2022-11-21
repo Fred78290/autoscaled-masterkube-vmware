@@ -36,7 +36,7 @@ if [ "$OSDISTRO" == "Linux" ]; then
     TZ=$(cat /etc/timezone)
     ISODIR=~/.local/vmware/cache
 else
-    TZ=$(sudo systemsetup -gettimezone | awk '{print $2}')
+    TZ=$(sudo systemsetup -gettimezone | awk -F: '{print $2}' | tr -d ' ')
     ISODIR=~/.local/vmware/cache/iso
 
     shopt -s expand_aliases
