@@ -12,6 +12,7 @@
 
 # The second VM will contains everything to run kubernetes
 
+CURDIR=$(dirname $0)
 DISTRO=jammy
 KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
 CNI_PLUGIN_VERSION=v1.1.1
@@ -32,18 +33,7 @@ SEED_ARCH=$([ "$(uname -m)" == "aarch64" ] && echo -n arm64 || echo -n amd64)
 CONTAINER_ENGINE=docker
 CONTAINER_CTL=docker
 
-if [ "$OSDISTRO" == "Linux" ]; then
-    TZ=$(cat /etc/timezone)
-    ISODIR=~/.local/vmware/cache
-else
-    TZ=$(sudo systemsetup -gettimezone | awk -F: '{print $2}' | tr -d ' ')
-    ISODIR=~/.local/vmware/cache/iso
-
-    shopt -s expand_aliases
-    alias base64=gbase64
-    alias sed=gsed
-    alias getopt=/usr/local/opt/gnu-getopt/bin/getopt
-fi
+source $CURDIR/common.sh
 
 mkdir -p $ISODIR
 mkdir -p $CACHE
@@ -111,11 +101,6 @@ if [ ! -z "$(govc vm.info $TARGET_IMAGE 2>&1)" ]; then
 fi
 
 echo_blue_bold "Ubuntu password:$PASSWORD"
-    shopt -s expand_aliases
-    alias base64=gbase64
-fi
-
-echo "Ubuntu password:$PASSWORD"
 
 BOOTSTRAP_PASSWORD=$(uuidgen)
 read -a VCENTER <<<"$(echo $GOVC_URL | awk -F/ '{print $3}' | tr '@' ' ')"

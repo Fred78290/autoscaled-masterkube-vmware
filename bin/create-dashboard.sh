@@ -1,4 +1,7 @@
 #!/bin/bash
+CURDIR=$(dirname $0)
+
+source $CURDIR/common.sh
 
 echo_blue_bold "Deploy kubernetes dashboard"
 

@@ -6,17 +6,12 @@ CONTROLNODES=3
 WORKERNODES=3
 FORCE=NO
 
+source $CURDIR/common.sh
+
 pushd ${CURDIR}/../
 
 CONFIGURATION_LOCATION=${PWD}
 GOVCDEFS=${PWD}/bin/govc.defs
-
-if [ "$OSDISTRO" == "Darwin" ]; then
-    shopt -s expand_aliases
-    alias base64=gbase64
-    alias sed=gsed
-    alias getopt=/usr/local/opt/gnu-getopt/bin/getopt
-fi
 
 TEMP=$(getopt -o fg:p:r: --long configuration-location:,govc-defs:,force,node-group:,profile:,region: -n "$0" -- "$@")
 

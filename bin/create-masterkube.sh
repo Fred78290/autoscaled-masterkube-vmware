@@ -109,72 +109,12 @@ SSH_OPTIONS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 SCP_OPTIONS="${SSH_OPTIONS} -p -r"
 DELETE_CLUSTER=NO
 
+source $PWD/bin/common.sh
+
 # import govc hidden definitions
 if [ -f ${GOVCDEFS} ]; then
     source ${GOVCDEFS}
 fi
-
-function verbose() {
-    if [ $VERBOSE = "YES" ]; then
-        eval "$1"
-    else
-        eval "$1 &> /dev/null"
-    fi
-}
-
-function wait_jobs_finish() {
-    while :
-    do
-        if test "$(jobs | wc -l)" -eq 0; then
-            break
-        fi
-
-    wait -n
-    done
-
-    wait
-}
-
-function echo_blue_dot() {
-	echo -n -e "\e[90m\e[39m\e[1m\e[34m.\e[0m\e[39m"
-}
-
-function echo_blue_dot_title() {
-	# echo message in blue and bold
-	echo -n -e "\e[90m= \e[39m\e[1m\e[34m$1\e[0m\e[39m"
-}
-
-function echo_blue_bold() {
-	# echo message in blue and bold
-	echo -e "\e[90m= \e[39m\e[1m\e[34m$1\e[0m\e[39m"
-}
-
-function echo_title() {
-	# echo message in blue and bold
-    echo_line
-	echo_blue_bold "$1"
-    echo_line
-}
-
-function echo_grey() {
-	# echo message in light grey
-	echo -e "\e[90m$1\e[39m"
-}
-
-function echo_red() {
-	# echo message in red
-	echo -e "\e[31m$1\e[39m"
-}
-
-function echo_separator() {
-    echo_line
-	echo
-	echo
-}
-
-function echo_line() {
-	echo_grey "============================================================================================================================="
-}
 
 function nextip()
 {
@@ -311,39 +251,7 @@ Options are:
 EOF
 }
 
-for MANDATORY in kubectl govc jq yq
-do
-    if [ -z "$(command -v $MANDATORY)" ]; then
-        echo_red "The command $MANDATORY is missing"
-        exit 1
-    fi
-done
-
-if [ "$OSDISTRO" == "Darwin" ]; then
-    if [ -z "$(command -v gsed)" ]; then
-        echo_red "You must install gnu sed with brew (brew install gsed), this script is not compatible with the native macos sed"
-        exit 1
-    fi
-
-    if [ -z "$(command -v gbase64)" ]; then
-        echo_red "You must install gnu base64 with brew (brew install coreutils), this script is not compatible with the native macos base64"
-        exit 1
-    fi
-
-    if [ ! -e /usr/local/opt/gnu-getopt/bin/getopt ]; then
-        echo_red "You must install gnu gnu-getop with brew (brew install coreutils), this script is not compatible with the native macos base64"
-        exit 1
-    fi
-
-    shopt -s expand_aliases
-    alias base64=gbase64
-    alias sed=gsed
-    alias getopt=/usr/local/opt/gnu-getopt/bin/getopt
-
-    TZ=$(sudo systemsetup -gettimezone | awk '{print $2}')
-else
-    TZ=$(cat /etc/timezone)
-fi
+TEMP=$(getopt -o xvheucrk:n:p:s:t: --long route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 
 TEMP=$(getopt -o xvheucrk:n:p:s:t: --long nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 

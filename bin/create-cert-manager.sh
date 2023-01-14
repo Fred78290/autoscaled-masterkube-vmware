@@ -1,4 +1,6 @@
 #!/bin/bash
+CURDIR=$(dirname $0)
+source $CURDIR/common.sh
 function deploy {
     echo "Create $ETC_DIR/$1.json"
     echo $(eval "cat <<EOF
@@ -8,7 +10,7 @@ EOF") | jq . > $ETC_DIR/$1.json
     kubectl apply -f $ETC_DIR/$1.json --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 }
 
-if [ -z "${PUBLIC_DOMAIN_NAME}" ] || [ -z ${GODADDY_API_KEY} ]; then
+echo_blue_bold "Install cert-manager"
     echo "Don't install cert-manager, no public domain defined"
 else
     echo "Install cert-manager"
