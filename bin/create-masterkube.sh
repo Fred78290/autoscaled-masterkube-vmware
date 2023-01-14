@@ -632,7 +632,7 @@ fi
 
 # Check if ssh public key exists
 if [ ! -f $SSH_PUBLIC_KEY ]; then
-    echo_red "The private ssh key: $SSH_PRIVATE_KEY is not found"
+    echo_red "The private ssh key: $SSH_PUBLIC_KEY is not found"
     exit -1
 fi
 
@@ -656,7 +656,7 @@ if [ -z $KUBERNETES_PASSWORD ]; then
     fi
 fi
 
-export SSH_KEY=$(cat "${SSH_PUBLIC_KEY}")
+export SSH_KEY="$(cat ${SSH_PUBLIC_KEY})"
 
 # GRPC network endpoint
 if [ "$LAUNCH_CA" != "YES" ]; then
@@ -1008,12 +1008,7 @@ EOF
         DISK_SIZE=$(echo "${DISK_SIZE} / 1024" | bc)
 
         echo_line
-        echo_blue_bold "Clone ${TARGET_IMAGE} to ${MASTERKUBE_NODE}"
-        echo_blue_bold "TARGET_IMAGE=${TARGET_IMAGE}"
-        echo_blue_bold "MASTERKUBE_NODE=${MASTERKUBE_NODE}"
-        echo_blue_bold "MEMSIZE=${MEMSIZE}"
-        echo_blue_bold "NUM_VCPUS=${NUM_VCPUS}"
-        echo_blue_bold "DISK_SIZE=${DISK_SIZE}G"
+        echo_blue_bold "Clone ${TARGET_IMAGE} to ${MASTERKUBE_NODE} TARGET_IMAGE=${TARGET_IMAGE} MASTERKUBE_NODE=${MASTERKUBE_NODE} MEMSIZE=${MEMSIZE} NUM_VCPUS=${NUM_VCPUS} DISK_SIZE=${DISK_SIZE}G"
         echo_line
 
         # Clone my template
