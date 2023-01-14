@@ -30,6 +30,7 @@ export SEED_IMAGE="${DISTRO}-server-cloudimg-seed"
 export ROOT_IMG_NAME=${DISTRO}-kubernetes
 export CNI_PLUGIN=flannel
 export CNI_VERSION="v1.1.1"
+export USE_ZEROSSL=YES
 export USE_KEEPALIVED=NO
 export HA_CLUSTER=false
 export FIRSTNODE=0
@@ -179,10 +180,24 @@ Options are:
 --ssl-location                                 # Specify where the etc/ssl dir is stored, default ${SSL_LOCATION}
 --govc-defs                                    # Override the GOVC definitions, default ${GOVCDEFS}
 
-### CERT Design domain
---cert-email                                   # Specify the mail for lets encrypt, default ${CERT_EMAIL}
+### Design domain
+
 --public-domain                                # Specify the public domain to use, default ${PUBLIC_DOMAIN_NAME}
 --dashboard-hostname                           # Specify the hostname for kubernetes dashboard, default ${DASHBOARD_HOSTNAME}
+
+### Cert Manager
+
+--cert-email=<value>                           # Specify the mail for lets encrypt, default ${CERT_EMAIL}
+--use-zerossl                                  # Specify cert-manager to use zerossl, default ${USE_ZEROSSL}
+--dont-use-zerossl                             # Specify cert-manager to use letsencrypt, default ${USE_ZEROSSL}
+--zerossl-eab-kid=<value>                      # Specify zerossl eab kid, default ${ZEROSSL_EAB_KID}
+--zerossl-eab-hmac-secret=<value>              # Specify zerossl eab hmac secret, default ${ZEROSSL_EAB_HMAC_SECRET}
+--godaddy-key                                  # Specify godaddy api key
+--godaddy-secret                               # Specify godaddy api secret
+
+--route53-zone-id                              # Specify the route53 zone id, default ${AWS_ROUTE53_PUBLIC_ZONE_ID}
+--route53-access-key                           # Specify the route53 aws access key, default ${AWS_ROUTE53_ACCESSKEY}
+--route53-secret-key                           # Specify the route53 aws secret key, default ${AWS_ROUTE53_SECRETKEY}
 
 ### Design the kubernetes cluster
 
@@ -253,8 +268,6 @@ EOF
 
 TEMP=$(getopt -o xvheucrk:n:p:s:t: --long route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 
-TEMP=$(getopt -o xvheucrk:n:p:s:t: --long nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
-
 eval set -- "$TEMP"
 
 # extract options and their arguments into variables.
@@ -317,6 +330,42 @@ while true; do
         ;;
     --cert-email)
         CERT_EMAIL=$2
+        shift 2
+        ;;
+    --use-zerossl)
+        USE_ZEROSSL=YES
+        shift 1
+        ;;
+    --dont-use-zerossl)
+        USE_ZEROSSL=NO
+        shift 1
+        ;;
+    --zerossl-eab-kid)
+        ZEROSSL_EAB_KID=$2
+        shift 2
+        ;;
+    --zerossl-eab-hmac-secret)
+        ZEROSSL_EAB_HMAC_SECRET=$2
+        shift 2
+        ;;
+    --godaddy-key)
+        GODADDY_API_KEY=$2
+        shift 2
+        ;;
+    --godaddy-secret)
+        GODADDY_API_SECRET=$2
+        shift 2
+        ;;
+    --route53-zone-id)
+        AWS_ROUTE53_PUBLIC_ZONE_ID=$2
+        shift 2
+        ;;
+    --route53-access-key)
+        AWS_ROUTE53_ACCESSKEY=$2
+        shift 2
+        ;;
+    --route53-secret-key)
+        AWS_ROUTE53_SECRETKEY=$2
         shift 2
         ;;
     --dashboard-hostname)
@@ -763,7 +812,14 @@ export FIRSTNODE=$FIRSTNODE
 export NFS_SERVER_ADDRESS=$NFS_SERVER_ADDRESS
 export NFS_SERVER_PATH=$NFS_SERVER_PATH
 export NFS_STORAGE_CLASS=$NFS_STORAGE_CLASS
-
+export USE_ZEROSSL=${USE_ZEROSSL}
+export ZEROSSL_EAB_KID=${ZEROSSL_EAB_KID}
+export ZEROSSL_EAB_HMAC_SECRET=${ZEROSSL_EAB_HMAC_SECRET}
+export GODADDY_API_KEY=${GODADDY_API_KEY}
+export GODADDY_API_SECRET=${GODADDY_API_SECRET}
+export AWS_ROUTE53_PUBLIC_ZONE_ID=${AWS_ROUTE53_PUBLIC_ZONE_ID}
+export AWS_ROUTE53_ACCESSKEY=${AWS_ROUTE53_ACCESSKEY}
+export AWS_ROUTE53_SECRETKEY=${AWS_ROUTE53_SECRETKEY}
 EOF
 else
     source ${TARGET_CONFIG_LOCATION}/buildenv
