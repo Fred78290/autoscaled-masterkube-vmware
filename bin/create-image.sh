@@ -392,7 +392,7 @@ elif [ "${CONTAINER_ENGINE}" == "containerd" ]; then
     echo "Install Containerd"
     echo "==============================================================================================================================="
 
-    curl -sL  https://github.com/containerd/containerd/releases/download/v1.6.8/cri-containerd-cni-1.6.8-linux-${SEED_ARCH}.tar.gz | tar -C / -xz
+    curl -sL  https://github.com/containerd/containerd/releases/download/v1.6.15/cri-containerd-cni-1.6.15-linux-${SEED_ARCH}.tar.gz | tar -C / -xz
 
     mkdir -p /etc/containerd
     containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/g' | tee /etc/containerd/config.toml
@@ -400,7 +400,7 @@ elif [ "${CONTAINER_ENGINE}" == "containerd" ]; then
     systemctl enable containerd.service
     systemctl restart containerd
 
-    curl -sL  https://github.com/containerd/nerdctl/releases/download/v1.0.0/nerdctl-1.0.0-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
+    curl -sL  https://github.com/containerd/nerdctl/releases/download/v1.1.0/nerdctl-1.1.0-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
 else
 
     echo "==============================================================================================================================="
