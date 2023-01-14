@@ -85,6 +85,9 @@ export NFS_STORAGE_CLASS=nfs-client
 export CONFIGURATION_LOCATION=${PWD}
 export SSL_LOCATION=${CONFIGURATION_LOCATION}/etc/ssl
 export GOVCDEFS=${CONFIGURATION_LOCATION}/bin/govc.defs
+export AWS_ROUTE53_PUBLIC_ZONE_ID=
+export AWS_ROUTE53_ACCESSKEY=
+export AWS_ROUTE53_SECRETKEY=
 
 # defined in private govc.defs
 export CERT_EMAIL=

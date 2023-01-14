@@ -2,21 +2,19 @@
     "apiVersion": "cert-manager.io/v1",
     "kind": "ClusterIssuer",
     "metadata": {
-        "name": "letsencrypt-prod",
+        "name": "cert-issuer-prod",
         "namespace": "cert-manager"
     },
     "spec": {
         "acme": {
-            "server": "https://acme-v02.api.letsencrypt.org/directory",
-            "email": "$CERT_EMAIL",
             "privateKeySecretRef": {
-                "name": "letsencrypt-prod-account-key"
+                "name": "certmanager-prod-account-key"
             },
             "solvers": [
                 {
                     "selector": {
-                        "dnsNames": [
-                            "*.${PUBLIC_DOMAIN_NAME}"
+                        "dnsZones": [
+                            "${PUBLIC_DOMAIN_NAME}"
                         ]
                     },
                     "dns01": {

@@ -9,7 +9,7 @@
             "nginx.ingress.kubernetes.io/use-regex": "true",
             "nginx.ingress.kubernetes.io/rewrite-target": "$REWRITE_TARGET",
             "nginx.ingress.kubernetes.io/backend-protocol": "HTTP",
-            "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+            "cert-manager.io/cluster-issuer": "cert-issuer-prod",
             "external-dns.alpha.kubernetes.io/register": "true"
         }
     },
