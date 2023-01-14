@@ -85,7 +85,7 @@ while true ; do
                     CONTAINER_CTL=crictl
                     ;;
                 *)
-                    echo "Unsupported container runtime: $2"
+                    echo_red_bold "Unsupported container runtime: $2"
                     exit 1
                     ;;
             esac
@@ -101,16 +101,16 @@ while true ; do
             ;;
 
         --) shift ; break ;;
-        *) echo "$1 - Internal error!" ; exit 1 ;;
+        *) echo_red_bold "$1 - Internal error!" ; exit 1 ;;
     esac
 done
 
 if [ ! -z "$(govc vm.info $TARGET_IMAGE 2>&1)" ]; then
-    echo "$TARGET_IMAGE already exists!"
+    echo_blue_bold "$TARGET_IMAGE already exists!"
     exit 0
 fi
 
-if [ ! -z "$(command -v gbase64)" ]; then
+echo_blue_bold "Ubuntu password:$PASSWORD"
     shopt -s expand_aliases
     alias base64=gbase64
 fi
@@ -162,7 +162,7 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         DATASTORE="/${GOVC_DATACENTER}/datastore/${GOVC_DATASTORE}"
         FOLDER="/${GOVC_DATACENTER}/vm/${GOVC_FOLDER}"
 
-        echo "Import ${DISTRO}-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with govc"
+        echo_blue_bold "Import ${DISTRO}-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with govc"
         govc import.ova \
             -options=${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.txt \
             -folder="${FOLDER}" \
@@ -170,7 +170,7 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
             -name="${SEEDIMAGE}" \
             ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova
     else
-        echo "Import ${DISTRO}-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with ovftool"
+        echo_blue_bold "Import ${DISTRO}-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with ovftool"
 
         MAPPED_NETWORK=$(govc import.spec ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova | jq .NetworkMapping[0].Name | tr -d '"')
 
@@ -193,35 +193,35 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
     if [ $? -eq 0 ]; then
 
         if [ ! -z "${PRIMARY_NETWORK_ADAPTER}" ];then
-            echo "Change primary network card ${PRIMARY_NETWORK_NAME} to ${PRIMARY_NETWORK_ADAPTER} on ${SEEDIMAGE}"
+            echo_blue_bold "Change primary network card ${PRIMARY_NETWORK_NAME} to ${PRIMARY_NETWORK_ADAPTER} on ${SEEDIMAGE}"
 
             govc vm.network.change -vm "${SEEDIMAGE}" -net="${PRIMARY_NETWORK_NAME}" -net.adapter="${PRIMARY_NETWORK_ADAPTER}"
         fi
 
         if [ ! -z "${SECOND_NETWORK_NAME}" ]; then
-            echo "Add second network card ${SECOND_NETWORK_NAME} on ${SEEDIMAGE}"
+            echo_blue_bold "Add second network card ${SECOND_NETWORK_NAME} on ${SEEDIMAGE}"
 
             govc vm.network.add -vm "${SEEDIMAGE}" -net="${SECOND_NETWORK_NAME}" -net.adapter="${SECOND_NETWORK_ADAPTER}"
         fi
 
-        echo "Power On ${SEEDIMAGE}"
+        echo_blue_bold "Power On ${SEEDIMAGE}"
         govc vm.upgrade -version=17 -vm ${SEEDIMAGE}
         govc vm.power -on "${SEEDIMAGE}"
 
-        echo "Wait for IP from $SEEDIMAGE"
+        echo_blue_bold "Wait for IP from $SEEDIMAGE"
         IPADDR=$(govc vm.ip -wait 5m "${SEEDIMAGE}")
 
         if [ -z "${IPADDR}" ]; then
-            echo "Can't get IP!"
+            echo_red_bold "Can't get IP!"
             exit -1
         fi
 
         # Prepare seed VM
-        echo "Install cloud-init VMWareGuestInfo datasource"
+        echo_blue_bold "Install cloud-init VMWareGuestInfo datasource"
 
         ssh -t "${USER}@${IPADDR}" sudo "sh -c 'echo datasource_list: [ NoCloud, VMware, OVF ] > /etc/cloud/cloud.cfg.d/99-VMWare-Only.cfg'"
 
-        echo "clean cloud-init"
+        echo_blue_bold "clean cloud-init"
         ssh -t "${USER}@${IPADDR}" sudo cloud-init clean
         ssh -t "${USER}@${IPADDR}" sudo cloud-init clean -l
         ssh -t "${USER}@${IPADDR}" sudo shutdown -h now
@@ -229,7 +229,7 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         # Shutdown the guest
         govc vm.power -persist-session=false -s "${SEEDIMAGE}"
 
-        echo "Wait ${SEEDIMAGE} to shutdown"
+        echo_blue_bold "Wait ${SEEDIMAGE} to shutdown"
         while [ $(govc vm.info -json "${SEEDIMAGE}" | jq .VirtualMachines[0].Runtime.PowerState | tr -d '"') == "poweredOn" ]
         do
             echo -n "."
@@ -237,19 +237,19 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         done
         echo
 
-        echo "${SEEDIMAGE} is ready"
+        echo_blue_bold "${SEEDIMAGE} is ready"
     else
-        echo "Import failed!"
+        echo_blue_bold "Import failed!"
         exit -1
     fi 
 else
-    echo "${SEEDIMAGE} already exists, nothing to do!"
+    echo_blue_bold "${SEEDIMAGE} already exists, nothing to do!"
 fi
 
 KUBERNETES_MINOR_RELEASE=$(echo -n $KUBERNETES_VERSION | tr '.' ' ' | awk '{ print $2 }')
 CRIO_VERSION=$(echo -n $KUBERNETES_VERSION | tr -d 'v' | tr '.' ' ' | awk '{ print $1"."$2 }')
 
-echo "Prepare ${TARGET_IMAGE} image with cri-o version: $CRIO_VERSION and kubernetes: $KUBERNETES_VERSION"
+echo_blue_bold "Prepare ${TARGET_IMAGE} image with cri-o version: $CRIO_VERSION and kubernetes: $KUBERNETES_VERSION"
 
 cat > "${ISODIR}/user-data" <<EOF
 #cloud-config
@@ -649,10 +649,10 @@ govc vm.change -vm "${TARGET_IMAGE}" \
     -e guestinfo.vendordata="$(cat ${CACHE}/vendordata.base64)" \
     -e guestinfo.vendordata.encoding="gzip+base64"
 
-echo "Power On ${TARGET_IMAGE}"
+echo_blue_bold "Power On ${TARGET_IMAGE}"
 govc vm.power -on "${TARGET_IMAGE}"
 
-echo "Wait for IP from ${TARGET_IMAGE}"
+echo_blue_bold "Wait for IP from ${TARGET_IMAGE}"
 IPADDR=$(govc vm.ip -wait 5m "${TARGET_IMAGE}")
 
 scp "${ISODIR}/prepare-image.sh" "${USER}@${IPADDR}:~"
@@ -661,14 +661,14 @@ ssh -t "${USER}@${IPADDR}" sudo ./prepare-image.sh
 
 govc vm.power -persist-session=false -s=true "${TARGET_IMAGE}"
 
-echo "Wait ${TARGET_IMAGE} to shutdown"
+echo_blue_dot_title "Wait ${TARGET_IMAGE} to shutdown"
 while [ $(govc vm.info -json "${TARGET_IMAGE}" | jq .VirtualMachines[0].Runtime.PowerState | tr -d '"') == "poweredOn" ]
 do
-    echo -n "."
+    echo_blue_dot
     sleep 1
 done
 echo
 
-echo "Created image ${TARGET_IMAGE} with kubernetes version ${KUBERNETES_VERSION}"
+echo_blue_bold "Created image ${TARGET_IMAGE} with kubernetes version ${KUBERNETES_VERSION}"
 
 exit 0

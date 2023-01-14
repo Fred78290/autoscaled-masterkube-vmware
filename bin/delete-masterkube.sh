@@ -51,7 +51,7 @@ while true; do
         --configuration-location)
             CONFIGURATION_LOCATION=$2
             if [ ! -d ${CONFIGURATION_LOCATION} ]; then
-                echo_red "kubernetes output : ${CONFIGURATION_LOCATION} not found"
+                echo_red_bold "kubernetes output : ${CONFIGURATION_LOCATION} not found"
                 exit 1
             fi
             shift 2
@@ -61,7 +61,7 @@ while true; do
             break
             ;;
         *)
-            echo "$1 - Internal error!"
+            echo_red_bold "$1 - Internal error!"
             exit 1
             ;;
     esac
@@ -74,7 +74,7 @@ TARGET_CONFIG_LOCATION=${CONFIGURATION_LOCATION}/config/${NODEGROUP_NAME}/config
 TARGET_DEPLOY_LOCATION=${CONFIGURATION_LOCATION}/config/${NODEGROUP_NAME}/deployment
 TARGET_CLUSTER_LOCATION=${CONFIGURATION_LOCATION}/cluster/${NODEGROUP_NAME}
 
-echo "Delete masterkube ${MASTERKUBE} previous instance"
+echo_blue_bold "Delete masterkube ${MASTERKUBE} previous instance"
 
 if [ -f ${TARGET_CLUSTER_LOCATION}/buildenv ]; then
     source ${TARGET_CLUSTER_LOCATION}/buildenv
@@ -95,8 +95,8 @@ if [ "$FORCE" = "YES" ]; then
         fi
 
         if [ "$(govc vm.info ${MASTERKUBE_NODE} 2>&1)" ]; then
-            echo "Delete VM: $MASTERKUBE_NODE"
-            govc vm.power -persist-session=false -s $MASTERKUBE_NODE || echo "Already power off"
+            echo_blue_bold "Delete VM: $MASTERKUBE_NODE"
+            govc vm.power -persist-session=false -s $MASTERKUBE_NODE || echo_blue_bold "Already power off"
             govc vm.destroy $MASTERKUBE_NODE
         fi
 
@@ -107,7 +107,7 @@ elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
     do
         vm=$(echo -n $vm | tr -d '"')
         if [ ! -z "$(govc vm.info $vm 2>&1)" ]; then
-            echo "Delete VM: $vm"
+            echo_blue_bold "Delete VM: $vm"
             govc vm.power -persist-session=false -s $vm
             govc vm.destroy $vm
         fi
@@ -115,7 +115,7 @@ elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
     done
 
     if [ ! -z "$(govc vm.info $MASTERKUBE 2>&1)" ]; then
-        echo "Delete VM: $MASTERKUBE"
+        echo_blue_bold "Delete VM: $MASTERKUBE"
         govc vm.power -persist-session=false -s $MASTERKUBE
         govc vm.destroy $MASTERKUBE
     fi

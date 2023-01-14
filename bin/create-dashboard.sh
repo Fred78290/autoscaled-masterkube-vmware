@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Deploy kubernetes dashboard"
+echo_blue_bold "Deploy kubernetes dashboard"
 
 # This file is intent to deploy dashboard inside the masterkube
 CURDIR=$(dirname $0)
@@ -75,6 +75,6 @@ else
     DASHBOARD_TOKEN=$(kubectl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n $K8NAMESPACE describe secret $(kubectl get secret -n $K8NAMESPACE  --kubeconfig=${TARGET_CLUSTER_LOCATION}/config | awk '/^my-dashboard-sa-token-/{print $1}') | awk '$1=="token:"{print $2}')
 fi
 
-echo "Dashboard token:$DASHBOARD_TOKEN"
+echo_blue_bold "Dashboard token:$DASHBOARD_TOKEN"
 
 echo $DASHBOARD_TOKEN > ${TARGET_CLUSTER_LOCATION}/dashboard-token
