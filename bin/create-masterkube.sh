@@ -422,7 +422,7 @@ while true; do
                 CONTAINER_ENGINE="$2"
                 ;;
             *)
-                echo "Unsupported container runtime: $2"
+                echo_red_bold "Unsupported container runtime: $2"
                 exit 1
                 ;;
         esac
