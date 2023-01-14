@@ -16,10 +16,6 @@ export KUBERNETES_TEMPLATE=./templates/dashboard
 export SUBPATH_POD_NAME='$(POD_NAME)'
 export REWRITE_TARGET='/$1'
 
-if [ -z "$DOMAIN_NAME" ]; then
-    export DOMAIN_NAME=$(openssl x509 -noout -subject -in ${SSL_LOCATION}/cert.pem | awk -F= '{print $NF}' | sed -e 's/^[ \t]*//' | sed 's/\*\.//g')
-fi
-
 mkdir -p $ETC_DIR
 
 function deploy {
@@ -34,12 +30,6 @@ kubectl apply -f $ETC_DIR/$1.json --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 deploy namespace
 deploy serviceaccount
 deploy service
-
-kubectl create secret tls $K8NAMESPACE \
-    -n $K8NAMESPACE \
-    --key ${SSL_LOCATION}/privkey.pem \
-    --cert ${SSL_LOCATION}/fullchain.pem \
-    --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 
 kubectl create secret generic kubernetes-dashboard-certs \
     --from-file=dashboard.key=${SSL_LOCATION}/privkey.pem \
@@ -67,10 +57,7 @@ kubectl create serviceaccount my-dashboard-sa -n $K8NAMESPACE --kubeconfig=${TAR
 kubectl create clusterrolebinding my-dashboard-sa --clusterrole=cluster-admin --serviceaccount=$K8NAMESPACE:my-dashboard-sa --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 # Find the secret that was created to hold the token for the SA
 kubectl get secrets -n $K8NAMESPACE --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
-# Show the contents of the secret to extract the token
-# kubectl describe secret my-dashboard-sa-token-xxxxx
-
-IFS=. read VERSION MAJOR MINOR <<< "${KUBERNETES_VERSION}"
+IFS=. read VERSION MAJOR MINOR <<< "$KUBERNETES_VERSION"
 
 if [ $MAJOR -gt 23 ]; then
     DASHBOARD_TOKEN=$(kubectl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config create token my-dashboard-sa -n $K8NAMESPACE --duration 86400h)

@@ -641,15 +641,23 @@ export PATH=$PWD/bin:$PATH
 
 # If CERT doesn't exist, create one autosigned
 if [ ! -f ${SSL_LOCATION}/privkey.pem ]; then
-    echo_title "Create certificat, please fill value"
+    if [ -z "${PUBLIC_DOMAIN_NAME}" ]; then
+        echo_red_bold "Public domaine is not defined, unable to create auto signed cert, exit"
+        exit 1
+    fi
 
-    mkdir -p ${SSL_LOCATION}/
-    openssl genrsa 2048 >${SSL_LOCATION}/privkey.pem
-    openssl req -new -x509 -nodes -sha1 -days 3650 -key ${SSL_LOCATION}/privkey.pem >${SSL_LOCATION}/cert.pem
-    cat ${SSL_LOCATION}/cert.pem ${SSL_LOCATION}/privkey.pem >${SSL_LOCATION}/fullchain.pem
-    chmod 644 ${SSL_LOCATION}/*
+    echo_blue_bold "Create autosigned certificat for domain: ${PUBLIC_DOMAIN_NAME}"
+    ${CURDIR}/create-cert.sh --domain ${PUBLIC_DOMAIN_NAME} --ssl-location ${SSL_LOCATION} --cert-email ${CERT_EMAIL}
+fi
 
-    echo_separator
+if [ ! -f ${SSL_LOCATION}/cert.pem ]; then
+    echo_red "${SSL_LOCATION}/cert.pem not found, exit"
+    exit 1
+fi
+
+if [ ! -f ${SSL_LOCATION}/fullchain.pem ]; then
+    echo_red "${SSL_LOCATION}/fullchain.pem not found, exit"
+    exit 1
 fi
 
 # If the VM template doesn't exists, build it from scrash
@@ -678,7 +686,7 @@ if [ "${CREATE_IMAGE_ONLY}" = "YES" ]; then
 fi
 
 # Extract the domain name from CERT
-export DOMAIN_NAME=$(openssl x509 -noout -subject -in ${SSL_LOCATION}/cert.pem | awk -F= '{print $NF}' | sed -e 's/^[ \t]*//' | sed 's/\*\.//g')
+export DOMAIN_NAME=$(openssl x509 -noout -subject -in ${SSL_LOCATION}/cert.pem -nameopt sep_multiline | grep 'CN=' | awk -F= '{print $2}' | sed -e 's/^[\s\t]*//')
 
 # Delete previous exixting version
 if [ "$RESUME" = "NO" ]; then
@@ -1245,7 +1253,6 @@ MASTER_IP=$(cat ${TARGET_CLUSTER_LOCATION}/manager-ip)
 TOKEN=$(cat ${TARGET_CLUSTER_LOCATION}/token)
 CACERT=$(cat ${TARGET_CLUSTER_LOCATION}/ca.cert)
 
-kubectl create secret tls kube-system -n kube-system --key ${SSL_LOCATION}/privkey.pem --cert ${SSL_LOCATION}/fullchain.pem --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 kubectl create secret generic autoscaler-ssh-keys -n kube-system --from-file=id_rsa="${SSH_PRIVATE_KEY}" --from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 
 kubeconfig-merge.sh ${MASTERKUBE} ${TARGET_CLUSTER_LOCATION}/config
