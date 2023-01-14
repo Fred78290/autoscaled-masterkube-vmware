@@ -18,12 +18,16 @@ export VSPHERE_AUTOSCALER_VERSION=v1.22.5
 
 case $KUBERNETES_MINOR_RELEASE in
     24)
-        CLUSTER_AUTOSCALER_VERSION=v1.24.2
-        VSPHERE_AUTOSCALER_VERSION=v1.24.6
+        CLUSTER_AUTOSCALER_VERSION=v1.24.7
+        AWS_AUTOSCALER_VERSION=v1.24.9
         ;;
     25)
-        CLUSTER_AUTOSCALER_VERSION=v1.25.2
-        VSPHERE_AUTOSCALER_VERSION=v1.25.2
+        CLUSTER_AUTOSCALER_VERSION=v1.25.5
+        AWS_AUTOSCALER_VERSION=v1.25.5
+        ;;
+    26)
+        CLUSTER_AUTOSCALER_VERSION=v1.26.0
+        AWS_AUTOSCALER_VERSION=v1.26.0
         ;;
     *)
         echo "Former version aren't supported by vmware autoscaler"
