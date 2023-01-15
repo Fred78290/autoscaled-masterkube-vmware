@@ -39,7 +39,7 @@
                 ],
                 "containers": [
                     {
-                        "image": "$REGISTRY/cluster-autoscaler:$CLUSTER_AUTOSCALER_VERSION",
+                        "image": "$AUTOSCALER_REGISTRY/cluster-autoscaler:$CLUSTER_AUTOSCALER_VERSION",
                         "name": "cluster-autoscaler",
                         "resources": {
                             "limits": {
@@ -55,8 +55,8 @@
                             "./cluster-autoscaler",
                             "--v=1",
                             "--stderrthreshold=info",
-                            "--cloud-provider=grpc",
-                            "--cloud-config=/etc/cluster/grpc-config.json",
+                            "--cloud-provider=${GRPC_PROVIDER}",
+                            "--cloud-config=${CLOUDPROVIDER_CONFIG}",
                             "--nodes=$MINNODES:$MAXNODES:true/$NODEGROUP_NAME",
                             "--max-nodes-total=$MAXTOTALNODES",
                             "--cores-total=$CORESTOTAL",

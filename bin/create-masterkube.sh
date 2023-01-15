@@ -39,6 +39,7 @@ export WORKERNODES=0
 export MINNODES=0
 export MAXNODES=9
 export MAXTOTALNODES=$MAXNODES
+export GRPC_PROVIDER=externalgrpc
 export CORESTOTAL="0:16"
 export MEMORYTOTAL="0:48"
 export MAXAUTOPROVISIONNEDNODEGROUPCOUNT="1"
@@ -123,9 +124,9 @@ fi
 function nextip()
 {
     IP=$1
-    IP_HEX=$(printf '%.2X%.2X%.2X%.2X\n' `echo $IP | sed -e 's/\./ /g'`)
+    IP_HEX=$(printf '%.2X%.2X%.2X%.2X\n' `echo $IP | tr '.' ' '`)
     NEXT_IP_HEX=$(printf %.8X `echo $(( 0x$IP_HEX + 1 ))`)
-    NEXT_IP=$(printf '%d.%d.%d.%d\n' `echo $NEXT_IP_HEX | sed -r 's/(..)/0x\1 /g'`)
+    NEXT_IP=$(printf '%d.%d.%d.%d\n' `echo $NEXT_IP_HEX | /usr/bin/sed -r 's/(..)/0x\1\ /g'`)
     echo "$NEXT_IP"
 }
 
@@ -198,6 +199,8 @@ Options are:
 --godaddy-key                                  # Specify godaddy api key
 --godaddy-secret                               # Specify godaddy api secret
 
+### Route53
+
 --route53-zone-id                              # Specify the route53 zone id, default ${AWS_ROUTE53_PUBLIC_ZONE_ID}
 --route53-access-key                           # Specify the route53 aws access key, default ${AWS_ROUTE53_ACCESSKEY}
 --route53-secret-key                           # Specify the route53 aws secret key, default ${AWS_ROUTE53_SECRETKEY}
@@ -254,7 +257,7 @@ Options are:
 --nfs-storage-class                            # The storage class name to use, default $NFS_STORAGE_CLASS
 
 ### Flags for autoscaler
-
+--cloudprovider=<value>                        # autoscaler flag <grpc|externalgrpc>, default: $GRPC_PROVIDER
 --max-nodes-total=<value>                      # autoscaler flag, default: $MAXTOTALNODES
 --cores-total=<value>                          # autoscaler flag, default: $CORESTOTAL
 --memory-total=<value>                         # autoscaler flag, default: $MEMORYTOTAL
@@ -269,7 +272,7 @@ Options are:
 EOF
 }
 
-TEMP=$(getopt -o xvheucrk:n:p:s:t: --long route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
+TEMP=$(getopt -o xvheucrk:n:p:s:t: --long cloudprovider:,route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 
 eval set -- "$TEMP"
 
@@ -550,7 +553,12 @@ while true; do
         WORKERNODES=$2
         shift 2
         ;;
-        # Same argument as cluster-autoscaler
+
+    # Same argument as cluster-autoscaler
+    --cloudprovider)
+        GRPC_PROVIDER="$2"
+        shift 2
+        ;;
     --max-nodes-total)
         MAXTOTALNODES="$2"
         shift 2
@@ -605,6 +613,11 @@ while true; do
         ;;
     esac
 done
+
+if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externgrpc" ]; then
+    echo_red_bold "Unsupported cloud provider: ${GRPC_PROVIDER}, on ly grpc|externalgrpc, exit"
+    exit
+fi
 
 TARGET_IMAGE="${ROOT_IMG_NAME}-cni-${CNI_PLUGIN}-${KUBERNETES_VERSION}-${CONTAINER_ENGINE}-${SEED_ARCH}"
 
@@ -1313,9 +1326,17 @@ kubeconfig-merge.sh ${MASTERKUBE} ${TARGET_CLUSTER_LOCATION}/config
 
 echo_title "Write vsphere autoscaler provider config"
 
-echo $(eval "cat <<EOF
-$(<./templates/cluster/grpc-config.json)
-EOF") | jq . >${TARGET_CONFIG_LOCATION}/grpc-config.json
+if [ ${GRPC_PROVIDER} = "grpc" ]; then
+    cat >${TARGET_CONFIG_LOCATION}/grpc-config.json <<EOF
+    {
+        "address": "$CONNECTTO",
+        "secret": "vmware",
+        "timeout": 300
+    }
+EOF
+else
+    echo "address: $CONNECTTO" > ${TARGET_CONFIG_LOCATION}/grpc-config.yaml
+fi
 
 if [ "${GOVC_INSECURE}" == "1" ]; then
     INSECURE=true

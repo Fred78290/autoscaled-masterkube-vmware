@@ -12,22 +12,25 @@ CACERT=$(cat ${TARGET_CLUSTER_LOCATION}/ca.cert)
 export K8NAMESPACE=kube-system
 export ETC_DIR=${TARGET_DEPLOY_LOCATION}/autoscaler
 export KUBERNETES_TEMPLATE=./templates/autoscaler
-export KUBERNETES_MINOR_RELEASE=$(echo -n $KUBERNETES_VERSION | tr '.' ' ' | awk '{ print $2 }')
+export KUBERNETES_MINOR_RELEASE=$(echo -n $KUBERNETES_VERSION | cut -d . -f 2)
 export CLUSTER_AUTOSCALER_VERSION=v1.22.1
 export VSPHERE_AUTOSCALER_VERSION=v1.22.5
+export AUTOSCALER_REGISTRY=$REGISTRY
+export CLOUDPROVIDER_CONFIG=/etc/cluster/grpc-config.json
+
+if [ "${GRPC_PROVIDER}" = "externalgrpc" ]; then
+    AUTOSCALER_REGISTRY=k8s.gcr.io/autoscaling
+    CLOUDPROVIDER_CONFIG=/etc/cluster/grpc-config.yaml
+fi
 
 case $KUBERNETES_MINOR_RELEASE in
-    24)
-        CLUSTER_AUTOSCALER_VERSION=v1.24.7
-        AWS_AUTOSCALER_VERSION=v1.24.9
-        ;;
     25)
-        CLUSTER_AUTOSCALER_VERSION=v1.25.5
-        AWS_AUTOSCALER_VERSION=v1.25.5
+        CLUSTER_AUTOSCALER_VERSION=v1.25.6
+        VSPHERE_AUTOSCALER_VERSION=v1.25.6
         ;;
     26)
-        CLUSTER_AUTOSCALER_VERSION=v1.26.0
-        AWS_AUTOSCALER_VERSION=v1.26.0
+        CLUSTER_AUTOSCALER_VERSION=v1.26.1
+        VSPHERE_AUTOSCALER_VERSION=v1.26.1
         ;;
     *)
         echo "Former version aren't supported by vmware autoscaler"

@@ -20,7 +20,7 @@
                 "hosts": [
                     "$DASHBOARD_HOSTNAME.$DOMAIN_NAME"
                 ],
-                "secretName": "$K8NAMESPACE"
+                "secretName": "kubernetes-dashboard-server-ingress-tls"
             }
         ],
         "rules": [

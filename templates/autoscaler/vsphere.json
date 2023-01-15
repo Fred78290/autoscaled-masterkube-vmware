@@ -54,7 +54,7 @@
                 ],
                 "containers": [
                     {
-                        "image": "$REGISTRY/vsphere-autoscaler:v1.21.0",
+                        "image": "$REGISTRY/vsphere-autoscaler:$VSPHERE_AUTOSCALER_VERSION",
                         "name": "vsphere-autoscaler",
                         "resources": {
                             "limits": {
@@ -68,6 +68,9 @@
                         },
                         "command": [
                             "/usr/local/bin/vsphere-autoscaler",
+                            "$EXTERNAL_ETCD_ARGS",
+                            "--src-etcd-ssl-dir=/etc/etcd/ssl",
+                            "--dst-etcd-ssl-dir=/etc/etcd/ssl",
                             "--config=/etc/cluster/kubernetes-vmware-autoscaler.json",
                             "--save=/var/run/cluster-autoscaler/vmware-autoscaler-state.json",
                             "--log-level=info"
@@ -85,6 +88,14 @@
                             {
                                 "name": "autoscaler-ssh-keys",
                                 "mountPath": "/root/.ssh"
+                            },
+                            {
+                                "name": "etcd-ssl",
+                                "mountPath": "/etc/etcd/ssl"
+                            },
+                            {
+                                "name": "kubernetes-pki",
+                                "mountPath": "/etc/kubernetes/pki"
                             }
                         ]
                     }
@@ -92,8 +103,7 @@
                 "volumes": [
                     {
                         "name": "cluster-socket",
-                        "emptyDir": {
-                        }
+                        "emptyDir": {}
                     },
                     {
                         "name": "config-cluster-autoscaler",
@@ -102,10 +112,29 @@
                         }
                     },
                     {
+                        "name": "ssl-certs",
+                        "hostPath": {
+                            "path": "/etc/ssl/certs/ca-certificates.crt"
+                        }
+                    },
+                    {
                         "name": "autoscaler-ssh-keys",
                         "secret": {
                             "secretName": "autoscaler-ssh-keys",
                             "defaultMode": 384
+                        }
+                    },
+                    {
+                        "name": "etcd-ssl",
+                        "secret": {
+                            "secretName": "etcd-ssl",
+                            "defaultMode": 384
+                        }
+                    },
+                    {
+                        "name": "kubernetes-pki",
+                        "configMap": {
+                            "name": "kubernetes-pki"
                         }
                     }
                 ]
