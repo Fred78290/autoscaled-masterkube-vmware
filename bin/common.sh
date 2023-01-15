@@ -1,4 +1,4 @@
-for MANDATORY in kubectl govc jq yq
+for MANDATORY in kubectl govc jq yq cfssl
 do
     if [ -z "$(command -v $MANDATORY)" ]; then
         echo_red "The command $MANDATORY is missing"
