@@ -1328,7 +1328,8 @@ kubeconfig-merge.sh ${MASTERKUBE} ${TARGET_CLUSTER_LOCATION}/config
 echo_title "Write vsphere autoscaler provider config"
 
 if [ ${GRPC_PROVIDER} = "grpc" ]; then
-    cat >${TARGET_CONFIG_LOCATION}/grpc-config.json <<EOF
+    CLOUDPROVIDER_CONFIG=${TARGET_CONFIG_LOCATION}/grpc-config.json
+    cat > ${CLOUDPROVIDER_CONFIG} <<EOF
     {
         "address": "$CONNECTTO",
         "secret": "vmware",
@@ -1336,7 +1337,8 @@ if [ ${GRPC_PROVIDER} = "grpc" ]; then
     }
 EOF
 else
-    echo "address: $CONNECTTO" > ${TARGET_CONFIG_LOCATION}/grpc-config.yaml
+    CLOUDPROVIDER_CONFIG=${TARGET_CONFIG_LOCATION}/grpc-config.yaml
+    echo "address: $CONNECTTO" > ${CLOUDPROVIDER_CONFIG}
 fi
 
 if [ "${GOVC_INSECURE}" == "1" ]; then
@@ -1474,7 +1476,7 @@ echo "$AUTOSCALER_CONFIG" | jq . > ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-a
 
 # Recopy config file on master node
 kubectl create configmap config-cluster-autoscaler --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
-	--from-file ${TARGET_CONFIG_LOCATION}/grpc-config.json \
+	--from-file ${CLOUDPROVIDER_CONFIG} \
 	--from-file ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
 
 # Create Pods
