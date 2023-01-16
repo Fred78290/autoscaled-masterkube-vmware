@@ -17,8 +17,10 @@ export CLUSTER_AUTOSCALER_VERSION=v1.22.1
 export VSPHERE_AUTOSCALER_VERSION=v1.22.5
 export AUTOSCALER_REGISTRY=$REGISTRY
 export CLOUDPROVIDER_CONFIG=/etc/cluster/grpc-config.json
+export USE_VANILLA_GRPC=--no-use-vanilla-grpc
 
 if [ "${GRPC_PROVIDER}" = "externalgrpc" ]; then
+    USE_VANILLA_GRPC=--use-vanilla-grpc
     AUTOSCALER_REGISTRY=k8s.gcr.io/autoscaling
     CLOUDPROVIDER_CONFIG=/etc/cluster/grpc-config.yaml
 fi
