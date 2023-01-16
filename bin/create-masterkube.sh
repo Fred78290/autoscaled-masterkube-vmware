@@ -614,8 +614,8 @@ while true; do
     esac
 done
 
-if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externgrpc" ]; then
-    echo_red_bold "Unsupported cloud provider: ${GRPC_PROVIDER}, on ly grpc|externalgrpc, exit"
+if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externalgrpc" ]; then
+    echo_red_bold "Unsupported cloud provider: ${GRPC_PROVIDER}, only grpc|externalgrpc, exit"
     exit
 fi
 
