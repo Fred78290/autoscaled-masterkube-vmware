@@ -1479,6 +1479,17 @@ kubectl create configmap config-cluster-autoscaler --kubeconfig=${TARGET_CLUSTER
 	--from-file ${CLOUDPROVIDER_CONFIG} \
 	--from-file ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
 
+kubectl create configmap kubernetes-pki --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
+	--from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki
+
+if [ "${EXTERNAL_ETCD}" = "true" ]; then
+    kubectl create secret generic etcd-ssl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
+        --from-file ${TARGET_CLUSTER_LOCATION}/etcd/ssl
+else
+    kubectl create secret generic etcd-ssl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
+        --from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki/etcd
+fi
+
 # Create Pods
 echo_title "= Create VSphere CSI provisionner"
 create-vsphere-provisionner.sh
@@ -1522,15 +1533,5 @@ kubectl create configmap masterkube-config --kubeconfig=${TARGET_CLUSTER_LOCATIO
     --from-file ${TARGET_CLUSTER_LOCATION}/dashboard-token \
     --from-file ${TARGET_CLUSTER_LOCATION}/token
 
-kubectl create configmap kubernetes-pki --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
-	--from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki
-
-if [ "${EXTERNAL_ETCD}" = "true" ]; then
-    kubectl create secret generic etcd-ssl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
-        --from-file ${TARGET_CLUSTER_LOCATION}/etcd/ssl
-else
-    kubectl create secret generic etcd-ssl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
-        --from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki/etcd
-fi
 
 popd
