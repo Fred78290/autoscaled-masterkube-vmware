@@ -24,6 +24,12 @@
             "spec": {
                 "priorityClassName": "system-cluster-critical",
                 "serviceAccountName": "cluster-autoscaler",
+                "securityContext": {
+                    "runAsUser": 65532,
+                    "runAsGroup": 65532,
+                    "fsGroup": 65532,
+                    "fsGroupChangePolicy": "OnRootMismatch"
+                },
                 "nodeSelector": {
                     "master": "true"
                 },
@@ -41,6 +47,9 @@
                     {
                         "image": "busybox",
                         "name": "cluster-autoscaler-init",
+                        "securityContext": {
+                            "privileged": true
+                        },
                         "command":[
                             "/bin/sh",
                             "-c",
@@ -72,6 +81,7 @@
                             "/usr/local/bin/vsphere-autoscaler",
                             "$EXTERNAL_ETCD_ARGS",
                             "$USE_VANILLA_GRPC_ARGS",
+                            "--use-controller-manager",
                             "--src-etcd-ssl-dir=/etc/etcd/ssl",
                             "--dst-etcd-ssl-dir=/etc/etcd/ssl",
                             "--config=/etc/cluster/kubernetes-vmware-autoscaler.json",
@@ -90,7 +100,7 @@
                             },
                             {
                                 "name": "autoscaler-ssh-keys",
-                                "mountPath": "/root/.ssh"
+                                "mountPath": "/etc/ssh"
                             },
                             {
                                 "name": "etcd-ssl",
@@ -176,14 +186,14 @@
                         "name": "autoscaler-ssh-keys",
                         "secret": {
                             "secretName": "autoscaler-ssh-keys",
-                            "defaultMode": 384
+                            "defaultMode": 416
                         }
                     },
                     {
                         "name": "etcd-ssl",
                         "secret": {
                             "secretName": "etcd-ssl",
-                            "defaultMode": 384
+                            "defaultMode": 416
                         }
                     },
                     {
