@@ -1410,6 +1410,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
         ]
     },
     "ssh-infos" : {
+        "wait-ssh-ready-seconds": 180,
         "user": "${KUBERNETES_USER}",
         "ssh-private-key": "${SSH_PRIVATE_KEY_LOCAL}"
     },
