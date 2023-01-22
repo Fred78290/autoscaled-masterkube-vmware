@@ -694,7 +694,7 @@ if [ "$LAUNCH_CA" != "YES" ]; then
         exit -1
     fi
 else
-    SSH_PRIVATE_KEY_LOCAL="/root/.ssh/id_rsa"
+    SSH_PRIVATE_KEY_LOCAL="/etc/ssh/id_rsa"
     TRANSPORT=unix
     LISTEN="/var/run/cluster-autoscaler/vmware.sock"
     CONNECTTO="unix:/var/run/cluster-autoscaler/vmware.sock"
