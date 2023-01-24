@@ -19,8 +19,9 @@ CACERT=$(cat ./cluster/ca.cert)
 VMUUID=
 CSI_REGION=home
 CSI_ZONE=office
+USE_K3S=false
 
-TEMP=$(getopt -o i:g:c:n: --long csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+TEMP=$(getopt -o i:g:c:n: --long use-k3s:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -76,6 +77,10 @@ while true; do
         CSI_ZONE=$2
         shift 2
         ;;
+    --use-k3s)
+        USE_K3S=$2
+        shift 2
+        ;;
     --)
         shift
         break
@@ -106,46 +111,85 @@ mkdir -p /etc/kubernetes/pki/etcd
 
 cp cluster/config /etc/kubernetes/admin.conf
 
-if [ "$HA_CLUSTER" = "true" ]; then
-    cp cluster/kubernetes/pki/ca.crt /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/ca.key /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/sa.key /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/sa.pub /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/front-proxy-ca.key /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/front-proxy-ca.crt /etc/kubernetes/pki
+if [ ${USE_K3S} == "true" ]; then
+    echo "K3S_ARGS='--node-name=${HOSTNAME} --server=https://${MASTER_IP} --token=${TOKEN}'" > /etc/systemd/system/k3s.service.env
 
-    chown -R root:root /etc/kubernetes/pki
+    if [ "$HA_CLUSTER" = "true" ]; then
+        echo "K3S_MODE=server" > /etc/default/k3s
 
-    chmod 600 /etc/kubernetes/pki/ca.crt
-    chmod 600 /etc/kubernetes/pki/ca.key
-    chmod 600 /etc/kubernetes/pki/sa.key
-    chmod 600 /etc/kubernetes/pki/sa.pub
-    chmod 600 /etc/kubernetes/pki/front-proxy-ca.key
-    chmod 600 /etc/kubernetes/pki/front-proxy-ca.crt
+        if [ "${EXTERNAL_ETCD}" == "true" ]; then
+            for CLUSTER_NODE in ${CLUSTER_NODES[*]}
+            do
+                IFS=: read HOST IP <<< $CLUSTER_NODE
+                if [ -n "${IP}" ]; then
+                    if [ -z "${ETCD_ENDPOINT}" ]; then
+                        ETCD_ENDPOINT="https://${IP}:2379"
+                    else
+                        ETCD_ENDPOINT="${ETCD_ENDPOINT},https://${IP}:2379"
+                    fi
+                fi
+            done
 
-    if [ -f cluster/kubernetes/pki/etcd/ca.crt ]; then
-        cp cluster/kubernetes/pki/etcd/ca.crt /etc/kubernetes/pki/etcd
-        cp cluster/kubernetes/pki/etcd/ca.key /etc/kubernetes/pki/etcd
-
-        chmod 600 /etc/kubernetes/pki/etcd/ca.crt
-        chmod 600 /etc/kubernetes/pki/etcd/ca.key
+            echo "K3S_SERVER_ARGS='--datastore-endpoint=${ETCD_ENDPOINT} --datastore-cafile /etc/etcd/ssl/ca.pem --datastore-certfile /etc/etcd/ssl/etcd.pem --datastore-keyfile /etc/etcd/ssl/etcd-key.pem'" > /etc/systemd/system/k3s.server.env
+        fi
     fi
 
-    kubeadm join ${MASTER_IP} \
-        --node-name "${HOSTNAME}" \
-        --token "${TOKEN}" \
-        --discovery-token-ca-cert-hash "sha256:${CACERT}" \
-        --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS} \
-        --control-plane
-else
-    kubeadm join ${MASTER_IP} \
-        --node-name "${HOSTNAME}" \
-        --token "${TOKEN}" \
-        --discovery-token-ca-cert-hash "sha256:${CACERT}" \
-        --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS}
-fi
+    echo -n "Start k3s service"
 
-export KUBECONFIG=/etc/kubernetes/admin.conf
+    systemctl enable k3s.service
+    systemctl start k3s.service
+
+    while [ ! -f /etc/rancher/k3s/k3s.yaml ];
+    do
+        echo -n "."
+    done
+
+    echo
+
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+else
+
+    if [ "$HA_CLUSTER" = "true" ]; then
+        cp cluster/kubernetes/pki/ca.crt /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/ca.key /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/sa.key /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/sa.pub /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/front-proxy-ca.key /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/front-proxy-ca.crt /etc/kubernetes/pki
+
+        chown -R root:root /etc/kubernetes/pki
+
+        chmod 600 /etc/kubernetes/pki/ca.crt
+        chmod 600 /etc/kubernetes/pki/ca.key
+        chmod 600 /etc/kubernetes/pki/sa.key
+        chmod 600 /etc/kubernetes/pki/sa.pub
+        chmod 600 /etc/kubernetes/pki/front-proxy-ca.key
+        chmod 600 /etc/kubernetes/pki/front-proxy-ca.crt
+
+        if [ -f cluster/kubernetes/pki/etcd/ca.crt ]; then
+            cp cluster/kubernetes/pki/etcd/ca.crt /etc/kubernetes/pki/etcd
+            cp cluster/kubernetes/pki/etcd/ca.key /etc/kubernetes/pki/etcd
+
+            chmod 600 /etc/kubernetes/pki/etcd/ca.crt
+            chmod 600 /etc/kubernetes/pki/etcd/ca.key
+        fi
+
+        kubeadm join ${MASTER_IP} \
+            --node-name "${HOSTNAME}" \
+            --token "${TOKEN}" \
+            --discovery-token-ca-cert-hash "sha256:${CACERT}" \
+            --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS} \
+            --control-plane
+    else
+        kubeadm join ${MASTER_IP} \
+            --node-name "${HOSTNAME}" \
+            --token "${TOKEN}" \
+            --discovery-token-ca-cert-hash "sha256:${CACERT}" \
+            --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS}
+    fi
+
+    export KUBECONFIG=/etc/kubernetes/admin.conf
+fi
 
 cat > patch.yaml <<EOF
 spec:

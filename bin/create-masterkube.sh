@@ -33,6 +33,7 @@ export CNI_VERSION="v1.1.1"
 export USE_ZEROSSL=YES
 export USE_KEEPALIVED=NO
 export HA_CLUSTER=false
+export USE_K3S=false
 export FIRSTNODE=0
 export CONTROLNODES=1
 export WORKERNODES=0
@@ -207,6 +208,7 @@ Options are:
 
 ### Design the kubernetes cluster
 
+--use-k3s                                      # Use k3s in place of kubeadm, default ${USE_K3S}
 --ha-cluster | -c                              # Allow to create an HA cluster, default ${HA_CLUSTER}
 --worker-nodes=<value>                         # Specify the number of worker node created in HA cluster, default $WORKERNODES
 --container-runtime=<docker|containerd|cri-o>  # Specify which OCI runtime to use, default ${CONTAINER_ENGINE}
@@ -272,7 +274,7 @@ Options are:
 EOF
 }
 
-TEMP=$(getopt -o xvheucrk:n:p:s:t: --long cloudprovider:,route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
+TEMP=$(getopt -o xvheucrk:n:p:s:t: --long use-k3s,cloudprovider:,route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 
 eval set -- "$TEMP"
 
@@ -399,6 +401,10 @@ while true; do
     --max-pods)
         MAX_PODS=$2
         shift 2
+        ;;
+    --use-k3s)
+        USE_K3S=true
+        shift 1
         ;;
     -c|--ha-cluster)
         HA_CLUSTER=true
@@ -619,7 +625,17 @@ if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externalgrpc" ];
     exit
 fi
 
-TARGET_IMAGE="${ROOT_IMG_NAME}-cni-${CNI_PLUGIN}-${KUBERNETES_VERSION}-${CONTAINER_ENGINE}-${SEED_ARCH}"
+if [ ${USE_K3S} ]; then
+    K3S_CHANNEL=$(curl -s https://update.k3s.io/v1-release/channels)
+    IFS=. read K8S_VERSION K8S_MAJOR K8S_MINOR <<< "${KUBERNETES_VERSION}"
+    KUBERNETES_VERSION=$(curl -s https://update.k3s.io/v1-release/channels | jq -r --arg KUBERNETES_VERSION "${K8S_VERSION}.${K8S_MAJOR}" '.data[]|select(.id == $KUBERNETES_VERSION)|.latest')
+fi
+
+if [ ${USE_K3S} ]; then
+    TARGET_IMAGE="${ROOT_IMG_NAME}-k3s-${KUBERNETES_VERSION}-${SEED_ARCH}"
+else
+    TARGET_IMAGE="${ROOT_IMG_NAME}-cni-${CNI_PLUGIN}-${KUBERNETES_VERSION}-${CONTAINER_ENGINE}-${SEED_ARCH}"
+fi
 
 export SSH_KEY_FNAME="$(basename $SSH_PRIVATE_KEY)"
 export SSH_PUBLIC_KEY="${SSH_PRIVATE_KEY}.pub"
@@ -730,6 +746,7 @@ if [ -z "$(govc vm.info ${TARGET_IMAGE} 2>&1)" ]; then
     echo_title "Create vmware preconfigured image ${TARGET_IMAGE}"
 
     ./bin/create-image.sh \
+        --use-k3s=${USE_K3S} \
         --aws-access-key=${AWS_ACCESSKEY} \
         --aws-secret-key=${AWS_SECRETKEY} \
         --password="${KUBERNETES_PASSWORD}" \
@@ -837,6 +854,7 @@ export AWS_ROUTE53_PUBLIC_ZONE_ID=${AWS_ROUTE53_PUBLIC_ZONE_ID}
 export AWS_ROUTE53_ACCESSKEY=${AWS_ROUTE53_ACCESSKEY}
 export AWS_ROUTE53_SECRETKEY=${AWS_ROUTE53_SECRETKEY}
 export GRPC_PROVIDER=${GRPC_PROVIDER}
+export USE_K3S=${USE_K3S}
 EOF
 else
     source ${TARGET_CONFIG_LOCATION}/buildenv
@@ -1049,7 +1067,7 @@ EOF
         IPADDR=$(govc vm.ip -wait 5m "${MASTERKUBE_NODE}")
         VMHOST=$(govc vm.info "${MASTERKUBE_NODE}" | grep 'Host:' | awk '{print $2}')
 
-        echo_title "Prepare ${MASTERKUBE_NODE} instance"
+        echo_title "Prepare ${MASTERKUBE_NODE} instance with IP:${IPADDR}"
         eval govc host.autostart.add -host="${VMHOST}" "${MASTERKUBE_NODE}" $SILENT
         eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ $SILENT
         eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} mkdir -p /home/${KUBERNETES_USER}/cluster $SILENT
@@ -1216,6 +1234,7 @@ do
                 echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} single instance master node, kubernetes version=${KUBERNETES_VERSION}"
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
+                    --use-k3s=${USE_K3S} \
                     --vm-uuid=${VMUUID} \
                     --csi-region=${GOVC_REGION} \
                     --csi-zone=${GOVC_ZONE} \
@@ -1244,6 +1263,7 @@ do
                 echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} instance master node number ${INDEX}, kubernetes version=${KUBERNETES_VERSION}"
 
                 ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
+                    --use-k3s=${USE_K3S} \
                     --vm-uuid=${VMUUID} \
                     --csi-region=${GOVC_REGION} \
                     --csi-zone=${GOVC_ZONE} \
@@ -1280,6 +1300,7 @@ do
                     eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
                     eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
+                        --use-k3s=${USE_K3S} \
                         --vm-uuid=${VMUUID} \
                         --csi-region=${GOVC_REGION} \
                         --csi-zone=${GOVC_ZONE} \
@@ -1295,6 +1316,7 @@ do
                 eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
+                    --use-k3s=${USE_K3S} \
                     --vm-uuid=${VMUUID} \
                     --csi-region=${GOVC_REGION} \
                     --csi-zone=${GOVC_ZONE} \
@@ -1384,6 +1406,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
         "deleteNodeGroup": false
     },
     "kubeadm": {
+        "use-k3s": ${USE_K3S},
         "address": "${MASTER_IP}",
         "token": "${TOKEN}",
         "ca": "sha256:${CACERT}",
@@ -1490,6 +1513,8 @@ else
     kubectl create secret generic etcd-ssl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
         --from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki/etcd
 fi
+
+exit
 
 # Create Pods
 echo_title "= Create VSphere CSI provisionner"
