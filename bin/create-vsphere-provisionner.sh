@@ -9,6 +9,10 @@ pushd $CURDIR/../
 export KUBERNETES_TEMPLATE=./templates/vsphere-storage
 export ETC_DIR=${TARGET_DEPLOY_LOCATION}/vsphere-storage
 
+if [ "${USE_K3S}" == "true" ]; then
+  ANNOTE_MASTER=true
+fi
+
 if [ -z "$(govc role.ls CNS-DATASTORE | grep 'Datastore.FileManagement')" ]; then
     ROLES="CNS-DATASTORE:Datastore.FileManagement,System.Anonymous,System.Read,System.View
     CNS-HOST-CONFIG-STORAGE:Host.Config.Storage,System.Anonymous,System.Read,System.View
@@ -138,7 +142,8 @@ stringData:
   $VCENTER.password: $GOVC_PASSWORD
 EOF
 
-sed "s/__REPLICAS__/$REPLICAS/g" ${KUBERNETES_TEMPLATE}/vsphere-csi-driver.yaml > ${ETC_DIR}/vsphere-csi-driver.yaml
+sed -e "s/__REPLICAS__/$REPLICAS/g" -e "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-csi-driver.yaml > ${ETC_DIR}/vsphere-csi-driver.yaml
+sed "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-cloud-controller-manager-ds.yaml > ${ETC_DIR}/vsphere-cloud-controller-manager-ds.yaml
 
 kubectl create ns vmware-system-csi --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
     --dry-run=client -o json | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
@@ -156,7 +161,7 @@ kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
     -f ${KUBERNETES_TEMPLATE}/cloud-controller-manager-role-bindings.yaml
 
 kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
-    -f ${KUBERNETES_TEMPLATE}/vsphere-cloud-controller-manager-ds.yaml
+    -f ${ETC_DIR}/vsphere-cloud-controller-manager-ds.yaml
 
 kubectl create secret generic vsphere-config-secret --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
     -n vmware-system-csi --dry-run=client -o json \

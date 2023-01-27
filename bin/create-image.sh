@@ -97,7 +97,7 @@ while true ; do
     esac
 done
 
-if [ ! -z "$(govc vm.info $TARGET_IMAGE 2>&1)" ]; then
+if [ -n "$(govc vm.info $TARGET_IMAGE 2>&1)" ]; then
     echo_blue_bold "$TARGET_IMAGE already exists!"
     exit 0
 fi
@@ -179,13 +179,13 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
 
     if [ $? -eq 0 ]; then
 
-        if [ ! -z "${PRIMARY_NETWORK_ADAPTER}" ];then
+        if [ -n "${PRIMARY_NETWORK_ADAPTER}" ];then
             echo_blue_bold "Change primary network card ${PRIMARY_NETWORK_NAME} to ${PRIMARY_NETWORK_ADAPTER} on ${SEEDIMAGE}"
 
             govc vm.network.change -vm "${SEEDIMAGE}" -net="${PRIMARY_NETWORK_NAME}" -net.adapter="${PRIMARY_NETWORK_ADAPTER}"
         fi
 
-        if [ ! -z "${SECOND_NETWORK_NAME}" ]; then
+        if [ -n "${SECOND_NETWORK_NAME}" ]; then
             echo_blue_bold "Add second network card ${SECOND_NETWORK_NAME} on ${SEEDIMAGE}"
 
             govc vm.network.add -vm "${SEEDIMAGE}" -net="${SECOND_NETWORK_NAME}" -net.adapter="${SECOND_NETWORK_ADAPTER}"
@@ -306,6 +306,22 @@ mkdir -p /etc/kubernetes
 EOF
 
 cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
+echo "net.bridge.bridge-nf-call-ip6tables = 1" >> /etc/sysctl.conf
+echo "net.bridge.bridge-nf-call-iptables = 1" >> /etc/sysctl.conf
+echo "net.bridge.bridge-nf-call-arptables = 1" >> /etc/sysctl.conf
+echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
+echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+
+echo "overlay" >> /etc/modules
+echo "br_netfilter" >> /etc/modules
+
+modprobe overlay
+modprobe br_netfilter
+
+echo '1' > /proc/sys/net/bridge/bridge-nf-call-iptables
+
+sysctl --system
+
 if [ "${USE_K3S}" == "true" ]; then
     CREDENTIALS_CONFIG=/var/lib/rancher/credentialprovider/config.yaml
     CREDENTIALS_BIN=/var/lib/rancher/credentialprovider/bin
@@ -317,7 +333,7 @@ fi
 mkdir -p $(dirname ${CREDENTIALS_CONFIG})
 mkdir -p ${CREDENTIALS_BIN}
 
-if [ ! -z "${AWS_ACCESS_KEY_ID}" ] && [ ! -z "${AWS_SECRET_ACCESS_KEY}" ]; then
+if [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
 
     curl -sL https://github.com/Fred78290/aws-ecr-credential-provider/releases/download/v1.0.0/ecr-credential-provider-${SEED_ARCH} -o ${CREDENTIALS_BIN}/ecr-credential-provider
     chmod +x ${CREDENTIALS_BIN}/ecr-credential-provider
@@ -402,22 +418,6 @@ else
     mkdir -p /etc/systemd/system/kubelet.service.d
     mkdir -p /var/lib/kubelet
     mkdir -p /opt/cni/bin
-
-    echo "net.bridge.bridge-nf-call-ip6tables = 1" >> /etc/sysctl.conf
-    echo "net.bridge.bridge-nf-call-iptables = 1" >> /etc/sysctl.conf
-    echo "net.bridge.bridge-nf-call-arptables = 1" >> /etc/sysctl.conf
-    echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
-    echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-
-    echo "overlay" >> /etc/modules
-    echo "br_netfilter" >> /etc/modules
-
-    modprobe overlay
-    modprobe br_netfilter
-
-    echo '1' > /proc/sys/net/bridge/bridge-nf-call-iptables
-
-    sysctl --system
 
     . /etc/os-release
 

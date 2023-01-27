@@ -2,7 +2,7 @@
 
 # Introduction
 
-This directory contains everthing to create a single autoscaled cluster or HA cluster with worker node on vSphere infrastructure.
+This directory contains everthing to create a single autoscaled cluster or HA cluster with worker node on vSphere infrastructure using **kubeadm** or **k3s**.
 
 ## Prerequistes
 
@@ -10,7 +10,7 @@ Ensure that you have sudo right
 
 You must also install
 
-|Linux|MacOS|
+|**Linux**|**MacOS**|
 | --- | --- |
 |kubectl|kubectl|
 |govc|govc|
@@ -22,6 +22,7 @@ You must also install
 ||gbase64|
 
 For MacOS it's recommanded to install **homebrew** and install **Prerequistes** from **homebrew**
+
 ## Create the masterkube
 
 First step is to fill a file named **govc.defs** in the bin directory with the values needed by govc tool
@@ -112,6 +113,7 @@ During the process the script will create many files located in
 | `--route53-access-key=<value>` | Specify the route53 aws access key. ||
 | `--route53-secret-key=<value>` | Specify the route53 aws secret key. ||
 | **Flag to design the kubernetes cluster** |
+| `--use-k3s` | Use k3s in place of kubeadm | NO |
 | `-c\|--ha-cluster` | Allow to create an HA cluster with 3 control planes | NO |
 | `--worker-nodes=<value>` | Specify the number of worker node created in the cluster. | 3 |
 | `--container-runtime=<value>` | Specify which OCI runtime to use. [**docker**\|**containerd**\|**cri-o**]| containerd |

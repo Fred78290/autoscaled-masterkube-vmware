@@ -159,7 +159,7 @@ function build_routes() {
             esac
         done
 
-        if [ ! -z "$TO" ] && [ ! -z "$VIA" ]; then
+        if [ -n "$TO" ] && [ -n "$VIA" ]; then
             ROUTES=$(echo $ROUTES | jq --arg TO $TO --arg VIA $VIA --argjson METRIC $METRIC '. += [{ "to": $TO, "via": $VIA, "metric": $METRIC }]')
         fi
     done
@@ -671,6 +671,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
         FIRSTNODE=1
     fi
 else
+    CONTROLNODES=1
     USE_KEEPALIVED=NO
     EXTERNAL_ETCD=false
 fi
@@ -1109,6 +1110,7 @@ done
 wait_jobs_finish
 
 CLUSTER_NODES=
+ETCD_ENDPOINT=
 
 if [ "$HA_CLUSTER" = "true" ]; then
     for INDEX in $(seq 1 $CONTROLNODES)
@@ -1121,6 +1123,14 @@ if [ "$HA_CLUSTER" = "true" ]; then
             CLUSTER_NODES="${NODE_DNS}"
         else
             CLUSTER_NODES="${CLUSTER_NODES},${NODE_DNS}"
+        fi
+
+        if [ "$EXTERNAL_ETCD" = "true" ]; then
+            if [ -z "${ETCD_ENDPOINT}" ]; then
+                ETCD_ENDPOINT="https://${IPADDR}:2379"
+            else
+                ETCD_ENDPOINT="${ETCD_ENDPOINT},https://${IPADDR}:2379"
+            fi
         fi
     done
 
@@ -1276,6 +1286,7 @@ do
                     --load-balancer-ip=${IPADDRS[0]} \
                     --cluster-nodes="${CLUSTER_NODES}" \
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[1]}" \
+                    --etcd-endpoint="${ETCD_ENDPOINT}" \
                     --ha-cluster=true \
                     --cni=${CNI_PLUGIN} \
                     --net-if=$NET_IF \
@@ -1308,6 +1319,7 @@ do
                         --node-group=${NODEGROUP_NAME} \
                         --node-index=${NODEINDEX} \
                         --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
+                        --etcd-endpoint="${ETCD_ENDPOINT}" \
                         --net-if=$NET_IF \
                         --cluster-nodes="${CLUSTER_NODES}" $SILENT
             else
@@ -1325,6 +1337,7 @@ do
                     --node-group=${NODEGROUP_NAME} \
                     --node-index=${NODEINDEX} \
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
+                    --etcd-endpoint="${ETCD_ENDPOINT}" \
                     --cluster-nodes="${CLUSTER_NODES}" \
                     --net-if=$NET_IF \
                     --control-plane=true $SILENT
@@ -1383,6 +1396,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
     "use-external-etcd": ${EXTERNAL_ETCD},
     "src-etcd-ssl-dir": "/etc/etcd/ssl",
     "dst-etcd-ssl-dir": "${ETCD_DST_DIR}",
+    "use-k3s": ${USE_K3S},
     "kubernetes-pki-srcdir": "/etc/kubernetes/pki",
     "kubernetes-pki-dstdir": "/etc/kubernetes/pki",
     "network": "${TRANSPORT}",
@@ -1406,12 +1420,16 @@ AUTOSCALER_CONFIG=$(cat <<EOF
         "deleteNodeGroup": false
     },
     "kubeadm": {
-        "use-k3s": ${USE_K3S},
         "address": "${MASTER_IP}",
         "token": "${TOKEN}",
         "ca": "sha256:${CACERT}",
         "extras-args": [
             "--ignore-preflight-errors=All"
+        ]
+    },
+    "k3s": {
+        "datastore-endpoint": "${ETCD_ENDPOINT}",
+        "extras-commands": [
         ]
     },
     "default-machine": "${DEFAULT_MACHINE}",
@@ -1514,8 +1532,6 @@ else
         --from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki/etcd
 fi
 
-exit
-
 # Create Pods
 echo_title "= Create VSphere CSI provisionner"
 create-vsphere-provisionner.sh
@@ -1554,10 +1570,10 @@ sudo sed -i -e "/masterkube-vmware/d" /etc/hosts
 sudo bash -c "echo '${NGINX_IP} masterkube-vmware.${DOMAIN_NAME} ${DASHBOARD_HOSTNAME}.${DOMAIN_NAME}' >> /etc/hosts"
 
 # Add cluster config in configmap
-kubectl create configmap masterkube-config --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
+kubectl create configmap masterkube-config -n kube-system \
+    --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 	--from-file ${TARGET_CLUSTER_LOCATION}/ca.cert \
     --from-file ${TARGET_CLUSTER_LOCATION}/dashboard-token \
     --from-file ${TARGET_CLUSTER_LOCATION}/token
-
 
 popd

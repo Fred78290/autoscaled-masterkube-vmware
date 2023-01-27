@@ -15,13 +15,13 @@ NET_IF=$(ip route get 1|awk '{print $5;exit}')
 
 MASTER_IP=$(cat ./cluster/manager-ip)
 TOKEN=$(cat ./cluster/token)
-CACERT=$(cat ./cluster/ca.cert)
 VMUUID=
 CSI_REGION=home
 CSI_ZONE=office
 USE_K3S=false
+ETCD_ENDPOINT=
 
-TEMP=$(getopt -o i:g:c:n: --long use-k3s:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+TEMP=$(getopt -o i:g:c:n: --long etcd-endpoint:,use-k3s:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -55,6 +55,10 @@ while true; do
         ;;
     --use-external-etcd)
         EXTERNAL_ETCD=$2
+        shift 2
+        ;;
+    --etcd-endpoint)
+        ETCD_ENDPOINT="$2"
         shift 2
         ;;
     --join-master)
@@ -111,25 +115,17 @@ mkdir -p /etc/kubernetes/pki/etcd
 
 cp cluster/config /etc/kubernetes/admin.conf
 
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
 if [ ${USE_K3S} == "true" ]; then
-    echo "K3S_ARGS='--node-name=${HOSTNAME} --server=https://${MASTER_IP} --token=${TOKEN}'" > /etc/systemd/system/k3s.service.env
+    ANNOTE_MASTER=true
+    echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --node-name=${HOSTNAME} --server=https://${MASTER_IP} --token=${TOKEN}'" > /etc/systemd/system/k3s.service.env
 
     if [ "$HA_CLUSTER" = "true" ]; then
         echo "K3S_MODE=server" > /etc/default/k3s
+        echo "K3S_DISABLE_ARGS='--disable-cloud-controller --disable=servicelb --disable=traefik --disable=metrics-server'" > /etc/systemd/system/k3s.disabled.env
 
-        if [ "${EXTERNAL_ETCD}" == "true" ]; then
-            for CLUSTER_NODE in ${CLUSTER_NODES[*]}
-            do
-                IFS=: read HOST IP <<< $CLUSTER_NODE
-                if [ -n "${IP}" ]; then
-                    if [ -z "${ETCD_ENDPOINT}" ]; then
-                        ETCD_ENDPOINT="https://${IP}:2379"
-                    else
-                        ETCD_ENDPOINT="${ETCD_ENDPOINT},https://${IP}:2379"
-                    fi
-                fi
-            done
-
+        if [ "${EXTERNAL_ETCD}" == "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
             echo "K3S_SERVER_ARGS='--datastore-endpoint=${ETCD_ENDPOINT} --datastore-cafile /etc/etcd/ssl/ca.pem --datastore-certfile /etc/etcd/ssl/etcd.pem --datastore-keyfile /etc/etcd/ssl/etcd-key.pem'" > /etc/systemd/system/k3s.server.env
         fi
     fi
@@ -139,15 +135,18 @@ if [ ${USE_K3S} == "true" ]; then
     systemctl enable k3s.service
     systemctl start k3s.service
 
-    while [ ! -f /etc/rancher/k3s/k3s.yaml ];
+    echo -n "Wait node ${HOSTNAME} to be ready"
+
+    while [ -z "$(kubectl get no ${HOSTNAME} 2>/dev/null | grep -v NAME)" ];
     do
         echo -n "."
+        sleep 1
     done
 
     echo
 
-    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 else
+    CACERT=$(cat ./cluster/ca.cert)
 
     if [ "$HA_CLUSTER" = "true" ]; then
         cp cluster/kubernetes/pki/ca.crt /etc/kubernetes/pki
@@ -187,16 +186,16 @@ else
             --discovery-token-ca-cert-hash "sha256:${CACERT}" \
             --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS}
     fi
-
-    export KUBECONFIG=/etc/kubernetes/admin.conf
 fi
 
-cat > patch.yaml <<EOF
+if [ "${USE_K3S}" = "false" ]; then
+    cat > patch.yaml <<EOF
 spec:
     providerID: 'vsphere://${VMUUID}'
 EOF
 
-kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+    kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+fi
 
 if [ "$HA_CLUSTER" = "true" ]; then
     kubectl label nodes ${HOSTNAME} \
@@ -213,7 +212,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
     fi
 else
     kubectl label nodes ${HOSTNAME} \
-        "node-role.kubernetes.io/worker=" \
+        "node-role.kubernetes.io/worker=${ANNOTE_MASTER}" \
         "topology.kubernetes.io/region=${CSI_REGION}" \
         "topology.kubernetes.io/zone=${CSI_ZONE}" \
         "topology.csi.vmware.com/k8s-region=${CSI_REGION}" \

@@ -31,6 +31,7 @@ VMUUID=
 CSI_REGION=home
 CSI_ZONE=office
 USE_K3S=false
+ETCD_ENDPOINT=
 
 if [ "$(uname -p)" == "aarch64" ];  then
 	ARCH="arm64"
@@ -38,7 +39,7 @@ else
 	ARCH="amd64"
 fi
 
-TEMP=$(getopt -o xm:g:r:i:c:n:k: --long use-k3s:,csi-region:,csi-zone:,vm-uuid:,allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
+TEMP=$(getopt -o xm:g:r:i:c:n:k: --long etcd-endpoint:,use-k3s:,csi-region:,csi-zone:,vm-uuid:,allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -134,6 +135,10 @@ while true; do
         EXTERNAL_ETCD=$2
         shift 2
         ;;
+    --etcd-endpoint)
+        ETCD_ENDPOINT="$2"
+        shift 2
+        ;;
 
     --csi-region)
         CSI_REGION=$2
@@ -182,7 +187,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
 fi
 
 if [ ${USE_K3S} == "true" ]; then
-
+    ANNOTE_MASTER=true
     CERT_SANS="${LOAD_BALANCER_IP},${CONTROL_PLANE_ENDPOINT_HOST},${CONTROL_PLANE_ENDPOINT_HOST%%.*}"
 
     for CERT_EXTRA in ${CERT_EXTRA_SANS[*]} 
@@ -199,29 +204,17 @@ if [ ${USE_K3S} == "true" ]; then
     done
 
     echo "K3S_MODE=server" > /etc/default/k3s
-    echo "K3S_ARGS='--node-name=${HOSTNAME} --advertise-address=${APISERVER_ADVERTISE_ADDRESS} --advertise-port=${APISERVER_ADVERTISE_PORT} --tls-san=${CERT_SANS}'" > /etc/systemd/system/k3s.service.env
+    echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --node-name=${HOSTNAME} --advertise-address=${APISERVER_ADVERTISE_ADDRESS} --advertise-port=${APISERVER_ADVERTISE_PORT} --tls-san=${CERT_SANS}'" > /etc/systemd/system/k3s.service.env
     echo "K3S_DISABLE_ARGS='--disable-cloud-controller --disable=servicelb --disable=traefik --disable=metrics-server'" > /etc/systemd/system/k3s.disabled.env
 
     if [ "$HA_CLUSTER" = "true" ]; then
-        if [ "${EXTERNAL_ETCD}" == "true" ]; then
-            for CLUSTER_NODE in ${CLUSTER_NODES[*]}
-            do
-                IFS=: read HOST IP <<< $CLUSTER_NODE
-                if [ -n "${IP}" ]; then
-                    if [ -z "${ETCD_ENDPOINT}" ]; then
-                        ETCD_ENDPOINT="https://${IP}:2379"
-                    else
-                        ETCD_ENDPOINT="${ETCD_ENDPOINT},https://${IP}:2379"
-                    fi
-                fi
-            done
-
+        if [ "${EXTERNAL_ETCD}" == "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
             echo "K3S_SERVER_ARGS='--datastore-endpoint=${ETCD_ENDPOINT} --datastore-cafile /etc/etcd/ssl/ca.pem --datastore-certfile /etc/etcd/ssl/etcd.pem --datastore-keyfile /etc/etcd/ssl/etcd-key.pem'" > /etc/systemd/system/k3s.server.env
         else
             echo "K3S_SERVER_ARGS=--cluster-init" > /etc/systemd/system/k3s.server.env
         fi
     fi
-set -x
+
     echo -n "Start k3s service"
 
     systemctl enable k3s.service
@@ -230,6 +223,7 @@ set -x
     while [ ! -f /etc/rancher/k3s/k3s.yaml ];
     do
         echo -n "."
+        sleep 1
     done
 
     echo
@@ -244,7 +238,24 @@ set -x
     cp /var/lib/rancher/k3s/server/token $CLUSTER_DIR/token
     cp -r /var/lib/rancher/k3s/server/tls/* $CLUSTER_DIR/kubernetes/pki/
 
+    openssl x509 -pubkey -in /var/lib/rancher/k3s/server/tls/server-ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //' | tr -d '\n' > $CLUSTER_DIR/ca.cert
+
+    sed -i -e "s/127.0.0.1/${CONTROL_PLANE_ENDPOINT_HOST}/g" -e "s/default/k8s-${HOSTNAME}-admin@${NODEGROUP_NAME}/g" $CLUSTER_DIR/config
+
+    rm -rf $CLUSTER_DIR/kubernetes/pki/temporary-certs
+
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+    echo -n "Wait node ${HOSTNAME} to be ready"
+
+    while [ -z "$(kubectl get no ${HOSTNAME} 2>/dev/null | grep -v NAME)" ];
+    do
+        echo -n "."
+        sleep 1
+    done
+
+    echo
+
 else
     case "$CNI_PLUGIN" in
         calico)
@@ -371,15 +382,15 @@ EOF
 
     for CLUSTER_NODE in ${CLUSTER_NODES[*]}
     do
-    IFS=: read HOST IP <<< $CLUSTER_NODE
-    [ -z ${IP} ] || echo "  - ${IP}" >> ${KUBEADM_CONFIG}
-    [ -z ${HOST} ] || echo "  - ${HOST}" >> ${KUBEADM_CONFIG}
-    [ -z ${HOST} ] || echo "  - ${HOST%%.*}" >> ${KUBEADM_CONFIG}
+        IFS=: read HOST IP <<< $CLUSTER_NODE
+        [ -z ${IP} ] || echo "  - ${IP}" >> ${KUBEADM_CONFIG}
+        [ -z ${HOST} ] || echo "  - ${HOST}" >> ${KUBEADM_CONFIG}
+        [ -z ${HOST} ] || echo "  - ${HOST%%.*}" >> ${KUBEADM_CONFIG}
     done
 
     # External ETCD
-    if [ "$EXTERNAL_ETCD" = "true" ]; then
-    cat >> ${KUBEADM_CONFIG} <<EOF
+    if [ "$EXTERNAL_ETCD" = "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
+        cat >> ${KUBEADM_CONFIG} <<EOF
 etcd:
 external:
     caFile: /etc/etcd/ssl/ca.pem
@@ -388,13 +399,10 @@ external:
     endpoints:
 EOF
 
-    for CLUSTER_NODE in ${CLUSTER_NODES[*]}
-    do
-        IFS=: read HOST IP <<< $CLUSTER_NODE
-        if [ -n "${IP}" ]; then
-            echo "    - https://${IP}:2379" >> ${KUBEADM_CONFIG}
-        fi
-    done
+        for ENDPOINT in $(echo -n ${ETCD_ENDPOINT} | tr ',' ' ')
+        do
+            echo "    - ${ENDPOINT}" >> ${KUBEADM_CONFIG}
+        done
     fi
 
     echo "Init K8 cluster with options:$K8_OPTIONS"
@@ -434,8 +442,6 @@ EOF
         cp /etc/kubernetes/pki/etcd/ca.crt $CLUSTER_DIR/kubernetes/pki/etcd/ca.crt
         cp /etc/kubernetes/pki/etcd/ca.key $CLUSTER_DIR/kubernetes/pki/etcd/ca.key
     fi
-
-    chmod -R uog+r $CLUSTER_DIR/*
 
     if [ "$CNI_PLUGIN" = "calico" ]; then
 
@@ -478,15 +484,19 @@ EOF
     fi
 fi
 
-cat > patch.yaml <<EOF
+chmod -R uog+r $CLUSTER_DIR/*
+
+if [ "${USE_K3S}" = "false" ]; then
+    cat > patch.yaml <<EOF
 spec:
     providerID: 'vsphere://${VMUUID}'
 EOF
 
-kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+    kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+fi
 
 kubectl label nodes ${HOSTNAME} \
-    "node-role.kubernetes.io/master=" \
+    "node-role.kubernetes.io/master=${ANNOTE_MASTER}" \
     "topology.kubernetes.io/region=${CSI_REGION}" \
     "topology.kubernetes.io/zone=${CSI_ZONE}" \
     "topology.csi.vmware.com/k8s-region=${CSI_REGION}" \
@@ -503,6 +513,8 @@ kubectl annotate node ${HOSTNAME} \
 
 if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
   kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
+elif [ "${USE_K3S}" == "true" ]; then
+  kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule node-role.kubernetes.io/control-plane:NoSchedule
 fi
 
 sed -i -e "/${CONTROL_PLANE_ENDPOINT%%.}/d" /etc/hosts
