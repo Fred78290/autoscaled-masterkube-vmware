@@ -482,11 +482,7 @@ EOF
         kubectl apply -f https://raw.githubusercontent.com/romana/romana/master/containerize/specs/romana-kubeadm.yml 2>&1
 
     fi
-fi
 
-chmod -R uog+r $CLUSTER_DIR/*
-
-if [ "${USE_K3S}" = "false" ]; then
     cat > patch.yaml <<EOF
 spec:
     providerID: 'vsphere://${VMUUID}'
@@ -494,6 +490,8 @@ EOF
 
     kubectl patch node ${HOSTNAME} --patch-file patch.yaml
 fi
+
+chmod -R uog+r $CLUSTER_DIR/*
 
 kubectl label nodes ${HOSTNAME} \
     "node-role.kubernetes.io/master=${ANNOTE_MASTER}" \
