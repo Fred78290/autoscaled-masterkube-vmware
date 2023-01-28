@@ -209,6 +209,8 @@ if [ "$HA_CLUSTER" = "true" ]; then
 
     if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
         kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
+    elif [ "${USE_K3S}" == "true" ]; then
+        kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule node-role.kubernetes.io/control-plane:NoSchedule
     fi
 else
     kubectl label nodes ${HOSTNAME} \
