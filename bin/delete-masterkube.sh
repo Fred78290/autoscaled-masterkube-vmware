@@ -101,7 +101,7 @@ elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
     for vm in $(kubectl get node -o json --kubeconfig ${TARGET_CLUSTER_LOCATION}/config | jq '.items| .[] | .metadata.labels["kubernetes.io/hostname"]')
     do
         vm=$(echo -n $vm | tr -d '"')
-        if [ ! -z "$(govc vm.info $vm 2>&1)" ]; then
+        if [ -n "$(govc vm.info $vm 2>&1)" ]; then
             echo_blue_bold "Delete VM: $vm"
             govc vm.power -persist-session=false -s $vm
             govc vm.destroy $vm
@@ -109,7 +109,7 @@ elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
         sudo sed -i "/${vm}/d" /etc/hosts
     done
 
-    if [ ! -z "$(govc vm.info $MASTERKUBE 2>&1)" ]; then
+    if [ -n "$(govc vm.info $MASTERKUBE 2>&1)" ]; then
         echo_blue_bold "Delete VM: $MASTERKUBE"
         govc vm.power -persist-session=false -s $MASTERKUBE
         govc vm.destroy $MASTERKUBE

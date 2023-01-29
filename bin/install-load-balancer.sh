@@ -87,4 +87,7 @@ EOF
 apt install --fix-broken
 
 systemctl restart nginx
-systemctl disable kubelet
+
+if [ -f /etc/systemd/system/kubelet.service ]; then
+    systemctl disable kubelet
+fi

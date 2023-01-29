@@ -28,7 +28,7 @@ spec:
         k8s-app: vsphere-cloud-controller-manager
     spec:
       nodeSelector:
-        node-role.kubernetes.io/master: ""
+        node-role.kubernetes.io/master: "__ANNOTE_MASTER__"
       securityContext:
         runAsUser: 1001
       tolerations:

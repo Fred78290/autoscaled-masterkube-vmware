@@ -15,12 +15,13 @@ NET_IF=$(ip route get 1|awk '{print $5;exit}')
 
 MASTER_IP=$(cat ./cluster/manager-ip)
 TOKEN=$(cat ./cluster/token)
-CACERT=$(cat ./cluster/ca.cert)
 VMUUID=
 CSI_REGION=home
 CSI_ZONE=office
+USE_K3S=false
+ETCD_ENDPOINT=
 
-TEMP=$(getopt -o i:g:c:n: --long csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+TEMP=$(getopt -o i:g:c:n: --long etcd-endpoint:,use-k3s:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -56,6 +57,10 @@ while true; do
         EXTERNAL_ETCD=$2
         shift 2
         ;;
+    --etcd-endpoint)
+        ETCD_ENDPOINT="$2"
+        shift 2
+        ;;
     --join-master)
         MASTER_IP=$2
         shift 2
@@ -74,6 +79,10 @@ while true; do
         ;;
     --csi-zone)
         CSI_ZONE=$2
+        shift 2
+        ;;
+    --use-k3s)
+        USE_K3S=$2
         shift 2
         ;;
     --)
@@ -106,53 +115,87 @@ mkdir -p /etc/kubernetes/pki/etcd
 
 cp cluster/config /etc/kubernetes/admin.conf
 
-if [ "$HA_CLUSTER" = "true" ]; then
-    cp cluster/kubernetes/pki/ca.crt /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/ca.key /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/sa.key /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/sa.pub /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/front-proxy-ca.key /etc/kubernetes/pki
-    cp cluster/kubernetes/pki/front-proxy-ca.crt /etc/kubernetes/pki
-
-    chown -R root:root /etc/kubernetes/pki
-
-    chmod 600 /etc/kubernetes/pki/ca.crt
-    chmod 600 /etc/kubernetes/pki/ca.key
-    chmod 600 /etc/kubernetes/pki/sa.key
-    chmod 600 /etc/kubernetes/pki/sa.pub
-    chmod 600 /etc/kubernetes/pki/front-proxy-ca.key
-    chmod 600 /etc/kubernetes/pki/front-proxy-ca.crt
-
-    if [ -f cluster/kubernetes/pki/etcd/ca.crt ]; then
-        cp cluster/kubernetes/pki/etcd/ca.crt /etc/kubernetes/pki/etcd
-        cp cluster/kubernetes/pki/etcd/ca.key /etc/kubernetes/pki/etcd
-
-        chmod 600 /etc/kubernetes/pki/etcd/ca.crt
-        chmod 600 /etc/kubernetes/pki/etcd/ca.key
-    fi
-
-    kubeadm join ${MASTER_IP} \
-        --node-name "${HOSTNAME}" \
-        --token "${TOKEN}" \
-        --discovery-token-ca-cert-hash "sha256:${CACERT}" \
-        --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS} \
-        --control-plane
-else
-    kubeadm join ${MASTER_IP} \
-        --node-name "${HOSTNAME}" \
-        --token "${TOKEN}" \
-        --discovery-token-ca-cert-hash "sha256:${CACERT}" \
-        --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS}
-fi
-
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
-cat > patch.yaml <<EOF
+if [ ${USE_K3S} == "true" ]; then
+    ANNOTE_MASTER=true
+    echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --node-name=${HOSTNAME} --server=https://${MASTER_IP} --token=${TOKEN}'" > /etc/systemd/system/k3s.service.env
+
+    if [ "$HA_CLUSTER" = "true" ]; then
+        echo "K3S_MODE=server" > /etc/default/k3s
+        echo "K3S_DISABLE_ARGS='--disable-cloud-controller --disable=servicelb --disable=traefik --disable=metrics-server'" > /etc/systemd/system/k3s.disabled.env
+
+        if [ "${EXTERNAL_ETCD}" == "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
+            echo "K3S_SERVER_ARGS='--datastore-endpoint=${ETCD_ENDPOINT} --datastore-cafile /etc/etcd/ssl/ca.pem --datastore-certfile /etc/etcd/ssl/etcd.pem --datastore-keyfile /etc/etcd/ssl/etcd-key.pem'" > /etc/systemd/system/k3s.server.env
+        fi
+    fi
+
+    echo -n "Start k3s service"
+
+    systemctl enable k3s.service
+    systemctl start k3s.service
+
+    echo -n "Wait node ${HOSTNAME} to be ready"
+
+    while [ -z "$(kubectl get no ${HOSTNAME} 2>/dev/null | grep -v NAME)" ];
+    do
+        echo -n "."
+        sleep 1
+    done
+
+    echo
+
+else
+    CACERT=$(cat ./cluster/ca.cert)
+
+    if [ "$HA_CLUSTER" = "true" ]; then
+        cp cluster/kubernetes/pki/ca.crt /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/ca.key /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/sa.key /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/sa.pub /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/front-proxy-ca.key /etc/kubernetes/pki
+        cp cluster/kubernetes/pki/front-proxy-ca.crt /etc/kubernetes/pki
+
+        chown -R root:root /etc/kubernetes/pki
+
+        chmod 600 /etc/kubernetes/pki/ca.crt
+        chmod 600 /etc/kubernetes/pki/ca.key
+        chmod 600 /etc/kubernetes/pki/sa.key
+        chmod 600 /etc/kubernetes/pki/sa.pub
+        chmod 600 /etc/kubernetes/pki/front-proxy-ca.key
+        chmod 600 /etc/kubernetes/pki/front-proxy-ca.crt
+
+        if [ -f cluster/kubernetes/pki/etcd/ca.crt ]; then
+            cp cluster/kubernetes/pki/etcd/ca.crt /etc/kubernetes/pki/etcd
+            cp cluster/kubernetes/pki/etcd/ca.key /etc/kubernetes/pki/etcd
+
+            chmod 600 /etc/kubernetes/pki/etcd/ca.crt
+            chmod 600 /etc/kubernetes/pki/etcd/ca.key
+        fi
+
+        kubeadm join ${MASTER_IP} \
+            --node-name "${HOSTNAME}" \
+            --token "${TOKEN}" \
+            --discovery-token-ca-cert-hash "sha256:${CACERT}" \
+            --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS} \
+            --control-plane
+    else
+        kubeadm join ${MASTER_IP} \
+            --node-name "${HOSTNAME}" \
+            --token "${TOKEN}" \
+            --discovery-token-ca-cert-hash "sha256:${CACERT}" \
+            --apiserver-advertise-address ${APISERVER_ADVERTISE_ADDRESS}
+    fi
+fi
+
+if [ "${USE_K3S}" = "false" ]; then
+    cat > patch.yaml <<EOF
 spec:
     providerID: 'vsphere://${VMUUID}'
 EOF
 
-kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+    kubectl patch node ${HOSTNAME} --patch-file patch.yaml
+fi
 
 if [ "$HA_CLUSTER" = "true" ]; then
     kubectl label nodes ${HOSTNAME} \
@@ -166,10 +209,12 @@ if [ "$HA_CLUSTER" = "true" ]; then
 
     if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
         kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
+    elif [ "${USE_K3S}" == "true" ]; then
+        kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule node-role.kubernetes.io/control-plane:NoSchedule
     fi
 else
     kubectl label nodes ${HOSTNAME} \
-        "node-role.kubernetes.io/worker=" \
+        "node-role.kubernetes.io/worker=${ANNOTE_MASTER}" \
         "topology.kubernetes.io/region=${CSI_REGION}" \
         "topology.kubernetes.io/zone=${CSI_ZONE}" \
         "topology.csi.vmware.com/k8s-region=${CSI_REGION}" \
