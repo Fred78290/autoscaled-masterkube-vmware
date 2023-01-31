@@ -233,6 +233,14 @@ else
     echo_blue_bold "${SEEDIMAGE} already exists, nothing to do!"
 fi
 
+if [ "${USE_K3S}" == "true" ]; then
+    CREDENTIALS_CONFIG=/var/lib/rancher/credentialprovider/config.yaml
+    CREDENTIALS_BIN=/var/lib/rancher/credentialprovider/bin
+else
+    CREDENTIALS_CONFIG=/etc/kubernetes/credential.yaml
+    CREDENTIALS_BIN=/usr/local/bin
+fi
+
 KUBERNETES_MINOR_RELEASE=$(echo -n $KUBERNETES_VERSION | tr '.' ' ' | awk '{ print $2 }')
 CRIO_VERSION=$(echo -n $KUBERNETES_VERSION | tr -d 'v' | tr '.' ' ' | awk '{ print $1"."$2 }')
 
@@ -280,6 +288,9 @@ KUBERNETES_MINOR_RELEASE=${KUBERNETES_MINOR_RELEASE}
 CRIO_VERSION=${CRIO_VERSION}
 CONTAINER_ENGINE=${CONTAINER_ENGINE}
 CONTAINER_CTL=${CONTAINER_CTL}
+USE_K3S=${USE_K3S}
+CREDENTIALS_CONFIG=$CREDENTIALS_CONFIG
+CREDENTIALS_BIN=$CREDENTIALS_BIN
 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
@@ -321,14 +332,6 @@ modprobe br_netfilter
 echo '1' > /proc/sys/net/bridge/bridge-nf-call-iptables
 
 sysctl --system
-
-if [ "${USE_K3S}" == "true" ]; then
-    CREDENTIALS_CONFIG=/var/lib/rancher/credentialprovider/config.yaml
-    CREDENTIALS_BIN=/var/lib/rancher/credentialprovider/bin
-else
-    CREDENTIALS_CONFIG=/etc/kubernetes/credential.yaml
-    CREDENTIALS_BIN=/usr/local/bin
-fi
 
 mkdir -p $(dirname ${CREDENTIALS_CONFIG})
 mkdir -p ${CREDENTIALS_BIN}
