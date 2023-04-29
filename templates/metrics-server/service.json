@@ -17,7 +17,7 @@
             {
                 "port": 443,
                 "protocol": "TCP",
-                "targetPort": "main-port"
+                "targetPort": "https"
             }
         ]
     }

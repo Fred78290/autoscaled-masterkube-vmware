@@ -45,8 +45,12 @@ case $KUBERNETES_MINOR_RELEASE in
         GODADDY_WEBHOOK_VERSION=v1.25.5
         ;;
     26)
-        CERT_MANAGER_VERSION=v1.11.0
+        CERT_MANAGER_VERSION=v1.11.1
         GODADDY_WEBHOOK_VERSION=v1.26.1
+        ;;
+    27)
+        CERT_MANAGER_VERSION=v1.11.1
+        GODADDY_WEBHOOK_VERSION=v1.27.1
         ;;
 esac
 

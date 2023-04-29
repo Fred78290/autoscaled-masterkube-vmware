@@ -4,23 +4,31 @@
     "metadata": {
         "name": "system:metrics-server"
     },
-    "rules": [
-        {
-            "apiGroups": [
-                ""
-            ],
-            "resources": [
-                "pods",
-                "nodes",
-                "nodes/stats",
-                "namespaces",
-                "configmaps"
-            ],
-            "verbs": [
-                "get",
-                "list",
-                "watch"
-            ]
-        }
-    ]
+	"rules": [
+		{
+			"apiGroups": [
+				""
+			],
+			"resources": [
+				"nodes/metrics"
+			],
+			"verbs": [
+				"get"
+			]
+		},
+		{
+			"apiGroups": [
+				""
+			],
+			"resources": [
+				"pods",
+				"nodes"
+			],
+			"verbs": [
+				"get",
+				"list",
+				"watch"
+			]
+		}
+	]
 }

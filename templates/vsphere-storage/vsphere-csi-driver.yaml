@@ -18,8 +18,11 @@ metadata:
   name: vsphere-csi-controller-role
 rules:
   - apiGroups: [""]
-    resources: ["nodes", "pods", "configmaps"]
+    resources: ["nodes", "pods"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "watch", "update"]
@@ -47,6 +50,9 @@ rules:
   - apiGroups: ["cns.vmware.com"]
     resources: ["cnsvspherevolumemigrations"]
     verbs: ["create", "get", "list", "watch", "update", "delete"]
+  - apiGroups: ["cns.vmware.com"]
+    resources: ["cnsvolumeinfoes"]
+    verbs: ["create", "get", "list", "watch", "delete"]
   - apiGroups: ["apiextensions.k8s.io"]
     resources: ["customresourcedefinitions"]
     verbs: ["get", "create", "update"]
@@ -150,13 +156,16 @@ data:
   "improved-csi-idempotency": "true"
   "improved-volume-topology": "true"
   "block-volume-snapshot": "true"
-  "csi-windows-support": "false"
+  "csi-windows-support": "true"
   "use-csinode-id": "true"
-  "list-volumes": "false"
+  "list-volumes": "true"
   "pv-to-backingdiskobjectid-mapping": "false"
   "cnsmgr-suspend-create-volume": "true"
   "topology-preferential-datastores": "true"
   "max-pvscsi-targets-per-vm": "false"
+  "multi-vcenter-csi-topology": "true"
+  "csi-internal-generated-cluster-id": "true"
+  "listview-tasks": "false"
 kind: ConfigMap
 metadata:
   name: internal-feature-states.csi.vsphere.vmware.com
@@ -203,6 +212,7 @@ spec:
         app: vsphere-csi-controller
         role: vsphere-csi
     spec:
+      priorityClassName: system-cluster-critical # Guarantees scheduling for critical system pods
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -236,12 +246,15 @@ spec:
       dnsPolicy: "Default"
       containers:
         - name: csi-attacher
-          image: k8s.gcr.io/sig-storage/csi-attacher:v3.4.0
+          image: k8s.gcr.io/sig-storage/csi-attacher:v4.2.0
           args:
             - "--v=4"
             - "--timeout=300s"
             - "--csi-address=$(ADDRESS)"
             - "--leader-election"
+            - "--leader-election-lease-duration=120s"
+            - "--leader-election-renew-deadline=60s"
+            - "--leader-election-retry-period=30s"
             - "--kube-api-qps=100"
             - "--kube-api-burst=100"
           env:
@@ -251,7 +264,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
         - name: csi-resizer
-          image: k8s.gcr.io/sig-storage/csi-resizer:v1.4.0
+          image: k8s.gcr.io/sig-storage/csi-resizer:v1.7.0
           args:
             - "--v=4"
             - "--timeout=300s"
@@ -260,6 +273,9 @@ spec:
             - "--kube-api-qps=100"
             - "--kube-api-burst=100"
             - "--leader-election"
+            - "--leader-election-lease-duration=120s"
+            - "--leader-election-renew-deadline=60s"
+            - "--leader-election-retry-period=30s"
           env:
             - name: ADDRESS
               value: /csi/csi.sock
@@ -267,7 +283,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
         - name: vsphere-csi-controller
-          image: gcr.io/cloud-provider-vsphere/csi/release/driver:v2.6.2
+          image: gcr.io/cloud-provider-vsphere/csi/release/driver:v3.0.1
           args:
             - "--fss-name=internal-feature-states.csi.vsphere.vmware.com"
             - "--fss-namespace=$(CSI_NAMESPACE)"
@@ -310,12 +326,12 @@ spec:
             httpGet:
               path: /healthz
               port: healthz
-            initialDelaySeconds: 10
-            timeoutSeconds: 3
-            periodSeconds: 5
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+            periodSeconds: 180
             failureThreshold: 3
         - name: liveness-probe
-          image: k8s.gcr.io/sig-storage/livenessprobe:v2.7.0
+          image: k8s.gcr.io/sig-storage/livenessprobe:v2.9.0
           args:
             - "--v=4"
             - "--csi-address=/csi/csi.sock"
@@ -323,9 +339,12 @@ spec:
             - name: socket-dir
               mountPath: /csi
         - name: vsphere-syncer
-          image: gcr.io/cloud-provider-vsphere/csi/release/syncer:v2.6.2
+          image: gcr.io/cloud-provider-vsphere/csi/release/syncer:v3.0.1
           args:
             - "--leader-election"
+            - "--leader-election-lease-duration=120s"
+            - "--leader-election-renew-deadline=60s"
+            - "--leader-election-retry-period=30s"
             - "--fss-name=internal-feature-states.csi.vsphere.vmware.com"
             - "--fss-namespace=$(CSI_NAMESPACE)"
           imagePullPolicy: "Always"
@@ -344,6 +363,8 @@ spec:
               value: "100"
             - name: INCLUSTER_CLIENT_BURST
               value: "100"
+            - name: GODEBUG
+              value: x509sha1=1
             - name: CSI_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -353,7 +374,7 @@ spec:
               name: vsphere-config-volume
               readOnly: true
         - name: csi-provisioner
-          image: k8s.gcr.io/sig-storage/csi-provisioner:v3.2.1
+          image: k8s.gcr.io/sig-storage/csi-provisioner:v3.4.0
           args:
             - "--v=4"
             - "--timeout=300s"
@@ -361,6 +382,9 @@ spec:
             - "--kube-api-qps=100"
             - "--kube-api-burst=100"
             - "--leader-election"
+            - "--leader-election-lease-duration=120s"
+            - "--leader-election-renew-deadline=60s"
+            - "--leader-election-retry-period=30s"
             - "--default-fstype=ext4"
             # needed only for topology aware setup
             #- "--feature-gates=Topology=true"
@@ -372,7 +396,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
         - name: csi-snapshotter
-          image: k8s.gcr.io/sig-storage/csi-snapshotter:v5.0.1
+          image: k8s.gcr.io/sig-storage/csi-snapshotter:v6.2.1
           args:
             - "--v=4"
             - "--kube-api-qps=100"
@@ -380,6 +404,9 @@ spec:
             - "--timeout=300s"
             - "--csi-address=$(ADDRESS)"
             - "--leader-election"
+            - "--leader-election-lease-duration=120s"
+            - "--leader-election-renew-deadline=60s"
+            - "--leader-election-retry-period=30s"
           env:
             - name: ADDRESS
               value: /csi/csi.sock
@@ -412,6 +439,7 @@ spec:
         app: vsphere-csi-node
         role: vsphere-csi
     spec:
+      priorityClassName: system-node-critical
       nodeSelector:
         kubernetes.io/os: linux
       serviceAccountName: vsphere-csi-node
@@ -419,7 +447,7 @@ spec:
       dnsPolicy: "ClusterFirstWithHostNet"
       containers:
         - name: node-driver-registrar
-          image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.1
+          image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.7.0
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -442,7 +470,7 @@ spec:
               - --mode=kubelet-registration-probe
             initialDelaySeconds: 3
         - name: vsphere-csi-node
-          image: gcr.io/cloud-provider-vsphere/csi/release/driver:v2.6.2
+          image: gcr.io/cloud-provider-vsphere/csi/release/driver:v3.0.1
           args:
             - "--fss-name=internal-feature-states.csi.vsphere.vmware.com"
             - "--fss-namespace=$(CSI_NAMESPACE)"
@@ -464,6 +492,8 @@ spec:
               value: "true"
             - name: LOGGER_LEVEL
               value: "PRODUCTION" # Options: DEVELOPMENT, PRODUCTION
+            - name: GODEBUG
+              value: x509sha1=1
             - name: CSI_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -502,7 +532,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 3
         - name: liveness-probe
-          image: k8s.gcr.io/sig-storage/livenessprobe:v2.7.0
+          image: k8s.gcr.io/sig-storage/livenessprobe:v2.9.0
           args:
             - "--v=4"
             - "--csi-address=/csi/csi.sock"
@@ -558,12 +588,13 @@ spec:
         app: vsphere-csi-node-windows
         role: vsphere-csi-windows
     spec:
+      priorityClassName: system-node-critical
       nodeSelector:
         kubernetes.io/os: windows
       serviceAccountName: vsphere-csi-node
       containers:
         - name: node-driver-registrar
-          image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
+          image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.7.0
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -586,7 +617,7 @@ spec:
               - --mode=kubelet-registration-probe
             initialDelaySeconds: 3
         - name: vsphere-csi-node
-          image: gcr.io/cloud-provider-vsphere/csi/release/driver:v2.6.2
+          image: gcr.io/cloud-provider-vsphere/csi/release/driver:v3.0.1
           args:
             - "--fss-name=internal-feature-states.csi.vsphere.vmware.com"
             - "--fss-namespace=$(CSI_NAMESPACE)"
@@ -643,7 +674,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 3
         - name: liveness-probe
-          image: k8s.gcr.io/sig-storage/livenessprobe:v2.6.0
+          image: k8s.gcr.io/sig-storage/livenessprobe:v2.9.0
           args:
             - "--v=4"
             - "--csi-address=/csi/csi.sock"

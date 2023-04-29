@@ -34,6 +34,10 @@ case $KUBERNETES_MINOR_RELEASE in
         CLUSTER_AUTOSCALER_VERSION=v1.26.1
         VSPHERE_AUTOSCALER_VERSION=v1.26.2
         ;;
+    27)
+        CLUSTER_AUTOSCALER_VERSION=v1.27.1
+        VSPHERE_AUTOSCALER_VERSION=v1.27.1
+        ;;
     *)
         echo "Former version aren't supported by vmware autoscaler"
         exit 1

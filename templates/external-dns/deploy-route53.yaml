@@ -58,7 +58,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: external-dns
-          image: k8s.gcr.io/external-dns/external-dns:v0.12.2
+          image: k8s.gcr.io/external-dns/external-dns:v0.13.4
           imagePullPolicy: Always
           resources:
             limits:
