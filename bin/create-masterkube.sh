@@ -90,6 +90,7 @@ export GOVCDEFS=${CONFIGURATION_LOCATION}/bin/govc.defs
 export AWS_ROUTE53_PUBLIC_ZONE_ID=
 export AWS_ROUTE53_ACCESSKEY=
 export AWS_ROUTE53_SECRETKEY=
+export UPGRADE_CLUSTER=NO
 
 # defined in private govc.defs
 export CERT_EMAIL=
@@ -178,6 +179,7 @@ Options are:
 --delete                                       # Delete cluster and exit
 --distribution                                 # Ubuntu distribution to use ${DISTRO}
 --create-image-only                            # Create image only
+--upgrade                                      # Upgrade existing cluster
 
 ### Flags to set some location informations
 
@@ -274,7 +276,7 @@ Options are:
 EOF
 }
 
-TEMP=$(getopt -o xvheucrk:n:p:s:t: --long use-k3s,cloudprovider:,route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
+TEMP=$(getopt -o xvheucrk:n:p:s:t: --long upgrade,use-k3s,cloudprovider:,route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 
 eval set -- "$TEMP"
 
@@ -291,6 +293,10 @@ while true; do
         ROOT_IMG_NAME=${DISTRO}-kubernetes
         shift 2
         ;;
+	--upgrade)
+		UPGRADE_CLUSTER=YES
+		shift
+		;;
     -v|--verbose)
         SILENT=
         shift 1
@@ -620,6 +626,11 @@ while true; do
     esac
 done
 
+if [ "${UPGRADE_CLUSTER}" == "YES" ] && [ "${DELETE_CLUSTER}" = "YES" ]; then
+    echo_red_bold "Can't upgrade deleted cluster, exit"
+    exit
+fi
+
 if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externalgrpc" ]; then
     echo_red_bold "Unsupported cloud provider: ${GRPC_PROVIDER}, only grpc|externalgrpc, exit"
     exit
@@ -780,16 +791,20 @@ fi
 # Extract the domain name from CERT
 export DOMAIN_NAME=$(openssl x509 -noout -subject -in ${SSL_LOCATION}/cert.pem -nameopt sep_multiline | grep 'CN=' | awk -F= '{print $2}' | sed -e 's/^[\s\t]*//')
 
-# Delete previous exixting version
-if [ "$RESUME" = "NO" ]; then
-    echo_title "Launch custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
-    delete-masterkube.sh --configuration-location=${CONFIGURATION_LOCATION} --govc-defs=${GOVCDEFS} --node-group=${NODEGROUP_NAME}
-else
-    echo_title "Resume custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
-fi
-
 mkdir -p ${TARGET_CONFIG_LOCATION}
 mkdir -p ${TARGET_CLUSTER_LOCATION}
+
+# Delete previous exixting version
+if [ "$RESUME" = "NO" ] && [ "${UPGRADE_CLUSTER}" == "NO" ]; then
+    echo_title "Launch custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
+    delete-masterkube.sh --configuration-location=${CONFIGURATION_LOCATION} --govc-defs=${GOVCDEFS} --node-group=${NODEGROUP_NAME}
+elif [ "${UPGRADE_CLUSTER}" == "NO" ]; then
+    echo_title "Resume custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
+else
+    echo_title "Upgrade ${MASTERKUBE} instance with ${TARGET_IMAGE}"
+	./bin/upgrade-cluster.sh
+	exit
+fi
 
 if [ "$RESUME" = "NO" ]; then
     cat ${GOVCDEFS} > ${TARGET_CONFIG_LOCATION}/buildenv
@@ -848,7 +863,6 @@ export VC_NETWORK_PUBLIC=$VC_NETWORK_PUBLIC
 export USE_DHCP_ROUTES_PUBLIC=$USE_DHCP_ROUTES_PUBLIC
 export REGISTRY=$REGISTRY
 export LAUNCH_CA=$LAUNCH_CA
-export CLUSTER_LB=$CLUSTER_LB
 export USE_KEEPALIVED=$USE_KEEPALIVED
 export EXTERNAL_ETCD=$EXTERNAL_ETCD
 export FIRSTNODE=$FIRSTNODE
