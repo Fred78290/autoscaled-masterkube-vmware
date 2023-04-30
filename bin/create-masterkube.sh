@@ -626,9 +626,18 @@ if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externalgrpc" ];
 fi
 
 if [ ${USE_K3S} ]; then
+	WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
+
     K3S_CHANNEL=$(curl -s https://update.k3s.io/v1-release/channels)
     IFS=. read K8S_VERSION K8S_MAJOR K8S_MINOR <<< "${KUBERNETES_VERSION}"
-    KUBERNETES_VERSION=$(curl -s https://update.k3s.io/v1-release/channels | jq -r --arg KUBERNETES_VERSION "${K8S_VERSION}.${K8S_MAJOR}" '.data[]|select(.id == $KUBERNETES_VERSION)|.latest')
+    KUBERNETES_VERSION=$(echo -n "$K3S_CHANNEL" | jq -r --arg KUBERNETES_VERSION "${K8S_VERSION}.${K8S_MAJOR}" '.data[]|select(.id == $KUBERNETES_VERSION)|.latest//""')
+
+	if [ -z "${KUBERNETES_VERSION}" ]; then
+		KUBERNETES_VERSION=$(echo -n "$K3S_CHANNEL" | jq -r '.data[]|select(.id == "latest")|.latest//""')
+		echo_red_bold "k3s ${WANTED_KUBERNETES_VERSION} not available, use latest $KUBERNETES_VERSION"
+	else
+		echo_blue_bold "k3s ${WANTED_KUBERNETES_VERSION} found, use k3s $KUBERNETES_VERSION"
+	fi
 fi
 
 if [ ${USE_K3S} ]; then
