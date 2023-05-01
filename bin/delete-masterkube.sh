@@ -95,7 +95,7 @@ if [ "$FORCE" = "YES" ]; then
             govc vm.destroy $MASTERKUBE_NODE
         fi
 
-        sudo sed -i "/${MASTERKUBE_NODE}/d" /etc/hosts
+        sudo sed -i '' "/${MASTERKUBE_NODE}/d" /etc/hosts
     done
 elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
     for vm in $(kubectl get node -o json --kubeconfig ${TARGET_CLUSTER_LOCATION}/config | jq '.items| .[] | .metadata.labels["kubernetes.io/hostname"]')
@@ -106,7 +106,7 @@ elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
             govc vm.power -persist-session=false -s $vm
             govc vm.destroy $vm
         fi
-        sudo sed -i "/${vm}/d" /etc/hosts
+        sudo sed -i '' "/${vm}/d" /etc/hosts
     done
 
     if [ -n "$(govc vm.info $MASTERKUBE 2>&1)" ]; then
@@ -126,7 +126,7 @@ rm -rf ${TARGET_CLUSTER_LOCATION}
 rm -rf ${TARGET_CONFIG_LOCATION}
 rm -rf ${TARGET_DEPLOY_LOCATION}
 
-sudo sed -i "/${MASTERKUBE}/d" /etc/hosts
-sudo sed -i "/masterkube-vmware/d" /etc/hosts
+sudo sed -i '' "/${MASTERKUBE}/d" /etc/hosts
+sudo sed -i '' "/masterkube-vmware/d" /etc/hosts
 
 popd

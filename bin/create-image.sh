@@ -159,7 +159,7 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
     else
         echo_blue_bold "Import ${DISTRO}-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with ovftool"
 
-        MAPPED_NETWORK=$(govc import.spec ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova | jq .NetworkMapping[0].Name | tr -d '"')
+        MAPPED_NETWORK=$(govc import.spec ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova | jq -r '.NetworkMapping[0].Name//""')
 
         ovftool \
             --acceptAllEulas \

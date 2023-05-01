@@ -5,95 +5,168 @@ CURDIR=$(dirname $0)
 SSH_OPTIONS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 SCP_OPTIONS="${SSH_OPTIONS} -p -r"
 
-pushd ${CURDIR}/../
-
-source $PWD/bin/common.sh
-
-if [ -f "${TARGET_CONFIG_LOCATION}/buildenv" ]; then
-	source ${TARGET_CONFIG_LOCATION}/buildenv
-else
-    cat > ${TARGET_CONFIG_LOCATION}/buildenv <<EOF
-export TARGET_CONFIG_LOCATION=${TARGET_CONFIG_LOCATION}
-export TARGET_DEPLOY_LOCATION=${TARGET_DEPLOY_LOCATION}
-export TARGET_CLUSTER_LOCATION=${TARGET_CLUSTER_LOCATION}
-export SSL_LOCATION=${SSL_LOCATION}
-export PUBLIC_DOMAIN_NAME=${PUBLIC_DOMAIN_NAME}
-export PUBLIC_IP="$PUBLIC_IP"
-export SCHEME="$SCHEME"
-export NODEGROUP_NAME="$NODEGROUP_NAME"
-export MASTERKUBE="$MASTERKUBE"
-export SSH_PRIVATE_KEY=$SSH_PRIVATE_KEY
-export SSH_PUBLIC_KEY=$SSH_PUBLIC_KEY
-export SSH_KEY="$SSH_KEY"
-export SSH_KEY_FNAME=$SSH_KEY_FNAME
-export KUBERNETES_VERSION=$KUBERNETES_VERSION
-export KUBERNETES_USER=${KUBERNETES_USER}
-export KUBERNETES_PASSWORD=$KUBERNETES_PASSWORD
-export KUBECONFIG=$KUBECONFIG
-export SEED_USER=$SEED_USER
-export SEED_IMAGE="$SEED_IMAGE"
-export ROOT_IMG_NAME=$ROOT_IMG_NAME
-export TARGET_IMAGE=$TARGET_IMAGE
-export CNI_PLUGIN=$CNI_PLUGIN
-export CNI_VERSION=$CNI_VERSION
-export HA_CLUSTER=$HA_CLUSTER
-export CONTROLNODES=$CONTROLNODES
-export WORKERNODES=$WORKERNODES
-export MINNODES=$MINNODES
-export MAXNODES=$MAXNODES
-export MAXTOTALNODES=$MAXTOTALNODES
-export CORESTOTAL="$CORESTOTAL"
-export MEMORYTOTAL="$MEMORYTOTAL"
-export MAXAUTOPROVISIONNEDNODEGROUPCOUNT=$MAXAUTOPROVISIONNEDNODEGROUPCOUNT
-export SCALEDOWNENABLED=$SCALEDOWNENABLED
-export SCALEDOWNDELAYAFTERADD=$SCALEDOWNDELAYAFTERADD
-export SCALEDOWNDELAYAFTERDELETE=$SCALEDOWNDELAYAFTERDELETE
-export SCALEDOWNDELAYAFTERFAILURE=$SCALEDOWNDELAYAFTERFAILURE
-export SCALEDOWNUNEEDEDTIME=$SCALEDOWNUNEEDEDTIME
-export SCALEDOWNUNREADYTIME=$SCALEDOWNUNREADYTIME
-export DEFAULT_MACHINE=$DEFAULT_MACHINE
-export UNREMOVABLENODERECHECKTIMEOUT=$UNREMOVABLENODERECHECKTIMEOUT
-export OSDISTRO=$OSDISTRO
-export TRANSPORT=$TRANSPORT
-export NET_DOMAIN=$NET_DOMAIN
-export NET_IP=$NET_IP
-export NET_GATEWAY=$NET_GATEWAY
-export NET_DNS=$NET_DNS
-export NET_MASK=$NET_MASK
-export NET_MASK_CIDR=$NET_MASK_CIDR
-export VC_NETWORK_PRIVATE=$VC_NETWORK_PRIVATE
-export USE_DHCP_ROUTES_PRIVATE=$USE_DHCP_ROUTES_PRIVATE
-export VC_NETWORK_PUBLIC=$VC_NETWORK_PUBLIC
-export USE_DHCP_ROUTES_PUBLIC=$USE_DHCP_ROUTES_PUBLIC
-export REGISTRY=$REGISTRY
-export LAUNCH_CA=$LAUNCH_CA
-export USE_KEEPALIVED=$USE_KEEPALIVED
-export EXTERNAL_ETCD=$EXTERNAL_ETCD
-export FIRSTNODE=$FIRSTNODE
-export NFS_SERVER_ADDRESS=$NFS_SERVER_ADDRESS
-export NFS_SERVER_PATH=$NFS_SERVER_PATH
-export NFS_STORAGE_CLASS=$NFS_STORAGE_CLASS
-export USE_ZEROSSL=${USE_ZEROSSL}
-export ZEROSSL_EAB_KID=${ZEROSSL_EAB_KID}
-export ZEROSSL_EAB_HMAC_SECRET=${ZEROSSL_EAB_HMAC_SECRET}
-export GODADDY_API_KEY=${GODADDY_API_KEY}
-export GODADDY_API_SECRET=${GODADDY_API_SECRET}
-export AWS_ROUTE53_PUBLIC_ZONE_ID=${AWS_ROUTE53_PUBLIC_ZONE_ID}
-export AWS_ROUTE53_ACCESSKEY=${AWS_ROUTE53_ACCESSKEY}
-export AWS_ROUTE53_SECRETKEY=${AWS_ROUTE53_SECRETKEY}
-export GRPC_PROVIDER=${GRPC_PROVIDER}
-export USE_K3S=${USE_K3S}
-EOF
-fi
-
-if [ ! -f ${TARGET_CLUSTER_LOCATION}/config ]; then
-	cp $HOME/.kube/config ${TARGET_CLUSTER_LOCATION}/config
-fi
-
 KUBECONFIG_CONTEXT=k8s-${MASTERKUBE}-admin@${NODEGROUP_NAME}
 
-kubectl config get-contexts ${KUBECONFIG_CONTEXT} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config &>/dev/null || (echo_red_bold "Cluster ${KUBECONFIG_CONTEXT} not found in kubeconfig" ; exit 1)
-kubectl config set-context ${KUBECONFIG_CONTEXT} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config &>/dev/null
+mkdir -p ${TARGET_CONFIG_LOCATION}
+mkdir -p ${TARGET_CLUSTER_LOCATION}
+
+kubectl config get-contexts ${KUBECONFIG_CONTEXT} &>/dev/null || (echo_red_bold "Cluster ${KUBECONFIG_CONTEXT} not found in kubeconfig" ; exit 1)
+kubectl config set-context ${KUBECONFIG_CONTEXT} &>/dev/null
+
+pushd ${CURDIR}/../
+
+source ${PWD}/bin/common.sh
+
+# Keep directory location
+KEEP_TARGET_CONFIG_LOCATION=${TARGET_CONFIG_LOCATION}
+KEEP_TARGET_DEPLOY_LOCATION=${TARGET_DEPLOY_LOCATION}
+KEEP_TARGET_CLUSTER_LOCATION=${TARGET_CLUSTER_LOCATION}
+KEEP_SSL_LOCATION=${SSL_LOCATION}
+KEEP_SSH_PRIVATE_KEY=${SSH_PRIVATE_KEY}
+KEEP_SSH_PUBLIC_KEY=${SSH_PUBLIC_KEY}
+KEEP_TARGET_IMAGE=${TARGET_IMAGE}
+
+function extract_configmap() {
+	local NAMESPACE=$2
+	local NAME=$1
+	local DSTDIR=$3
+
+	local CONFIGMAP=$(kubectl get cm ${NAME} -n ${NAMESPACE} -o json)
+	local FILES=$(echo ${CONFIGMAP} | jq -r '.data | keys_unsorted|.[]')
+	local CONTENT=
+
+	mkdir -p ${DSTDIR}
+	pushd ${DSTDIR}
+
+	for FILE in ${FILES}
+	do
+		JQPATH='.data."'${FILE}'"'
+		CONTENT=$(echo ${CONFIGMAP} | jq -r "${JQPATH}")
+		echo -n "${CONTENT}" > ${FILE}
+	done
+
+	popd
+}
+
+function extract_deployment() {
+	local NAMESPACE=$1
+	local CM=
+
+	for CM in $(kubectl get cm -n ${NODEGROUP_NAME} -o json | jq -r '.items[]|.metadata.name')
+	do
+		extract_configmap ${CM} ${NODEGROUP_NAME} "${TARGET_CONFIG_LOCATION}/../deployment/${CM}"
+	done
+}
+
+if [ ! -f "${TARGET_CONFIG_LOCATION}/buildenv" ]; then
+	echo_title "Restore config files"
+
+	extract_configmap kubernetes-pki kube-system ${TARGET_CLUSTER_LOCATION}/kubernetes/pki
+	extract_configmap cluster ${NODEGROUP_NAME} ${TARGET_CLUSTER_LOCATION}
+	extract_configmap config ${NODEGROUP_NAME} ${TARGET_CONFIG_LOCATION}
+	extract_deployment ${NODEGROUP_NAME}
+fi
+
+if [ ! -f "${TARGET_CONFIG_LOCATION}/buildenv" ]; then
+	echo_red_bold "${TARGET_CONFIG_LOCATION}/buildenv not found, exit"
+	exit 1
+fi
+
+source ${TARGET_CONFIG_LOCATION}/buildenv
+
+# Restore directory location
+TARGET_CONFIG_LOCATION=${KEEP_TARGET_CONFIG_LOCATION}
+TARGET_DEPLOY_LOCATION=${KEEP_TARGET_DEPLOY_LOCATION}
+TARGET_CLUSTER_LOCATION=${KEEP_TARGET_CLUSTER_LOCATION}
+SSL_LOCATION=${KEEP_SSL_LOCATION}
+SSH_PRIVATE_KEY=${KEEP_SSH_PRIVATE_KEY}
+SSH_PUBLIC_KEY=${KEEP_SSH_PUBLIC_KEY}
+TARGET_IMAGE=${KEEP_TARGET_IMAGE}
+
+if [ ! -f ${TARGET_CLUSTER_LOCATION}/config ]; then
+	cp ${HOME}/.kube/config ${TARGET_CLUSTER_LOCATION}/config
+fi
+
+cat ${GOVCDEFS} > ${TARGET_CONFIG_LOCATION}/buildenv
+
+cat > ${TARGET_CONFIG_LOCATION}/buildenv <<EOF
+export AWS_ROUTE53_ACCESSKEY=${AWS_ROUTE53_ACCESSKEY}
+export AWS_ROUTE53_PUBLIC_ZONE_ID=${AWS_ROUTE53_PUBLIC_ZONE_ID}
+export AWS_ROUTE53_SECRETKEY=${AWS_ROUTE53_SECRETKEY}
+export CLOUDPROVIDER_CONFIG=${CLOUDPROVIDER_CONFIG}
+export CNI_PLUGIN=${CNI_PLUGIN}
+export CNI_VERSION=${CNI_VERSION}
+export CONTROLNODES=${CONTROLNODES}
+export CORESTOTAL="${CORESTOTAL}"
+export DEFAULT_MACHINE=${DEFAULT_MACHINE}
+export EXTERNAL_ETCD=${EXTERNAL_ETCD}
+export FIRSTNODE=${FIRSTNODE}
+export GODADDY_API_KEY=${GODADDY_API_KEY}
+export GODADDY_API_SECRET=${GODADDY_API_SECRET}
+export GRPC_PROVIDER=${GRPC_PROVIDER}
+export HA_CLUSTER=${HA_CLUSTER}
+export KUBECONFIG=${KUBECONFIG}
+export KUBERNETES_PASSWORD=${KUBERNETES_PASSWORD}
+export KUBERNETES_USER=${KUBERNETES_USER}
+export KUBERNETES_VERSION=${KUBERNETES_VERSION}
+export LAUNCH_CA=${LAUNCH_CA}
+export MASTERKUBE="${MASTERKUBE}"
+export MAXAUTOPROVISIONNEDNODEGROUPCOUNT=${MAXAUTOPROVISIONNEDNODEGROUPCOUNT}
+export MAXNODES=${MAXNODES}
+export MAXTOTALNODES=${MAXTOTALNODES}
+export MEMORYTOTAL="${MEMORYTOTAL}"
+export MINNODES=${MINNODES}
+export NET_DNS=${NET_DNS}
+export NET_DOMAIN=${NET_DOMAIN}
+export NET_GATEWAY=${NET_GATEWAY}
+export NET_IP=${NET_IP}
+export NET_MASK_CIDR=${NET_MASK_CIDR}
+export NET_MASK=${NET_MASK}
+export NFS_SERVER_ADDRESS=${NFS_SERVER_ADDRESS}
+export NFS_SERVER_PATH=${NFS_SERVER_PATH}
+export NFS_STORAGE_CLASS=${NFS_STORAGE_CLASS}
+export NODEGROUP_NAME="${NODEGROUP_NAME}"
+export OSDISTRO=${OSDISTRO}
+export PUBLIC_DOMAIN_NAME=${PUBLIC_DOMAIN_NAME}
+export PUBLIC_IP="${PUBLIC_IP}"
+export REGISTRY=${REGISTRY}
+export ROOT_IMG_NAME=${ROOT_IMG_NAME}
+export SCALEDOWNDELAYAFTERADD=${SCALEDOWNDELAYAFTERADD}
+export SCALEDOWNDELAYAFTERDELETE=${SCALEDOWNDELAYAFTERDELETE}
+export SCALEDOWNDELAYAFTERFAILURE=${SCALEDOWNDELAYAFTERFAILURE}
+export SCALEDOWNENABLED=${SCALEDOWNENABLED}
+export SCALEDOWNUNEEDEDTIME=${SCALEDOWNUNEEDEDTIME}
+export SCALEDOWNUNREADYTIME=${SCALEDOWNUNREADYTIME}
+export SCHEME="${SCHEME}"
+export SEED_IMAGE="${SEED_IMAGE}"
+export SEED_USER=${SEED_USER}
+export SSH_KEY_FNAME=${SSH_KEY_FNAME}
+export SSH_KEY="${SSH_KEY}"
+export SSH_PRIVATE_KEY=${SSH_PRIVATE_KEY}
+export SSH_PUBLIC_KEY=${SSH_PUBLIC_KEY}
+export SSL_LOCATION=${SSL_LOCATION}
+export TARGET_CLUSTER_LOCATION=${TARGET_CLUSTER_LOCATION}
+export TARGET_CONFIG_LOCATION=${TARGET_CONFIG_LOCATION}
+export TARGET_DEPLOY_LOCATION=${TARGET_DEPLOY_LOCATION}
+export TARGET_IMAGE=${TARGET_IMAGE}
+export TRANSPORT=${TRANSPORT}
+export UNREMOVABLENODERECHECKTIMEOUT=${UNREMOVABLENODERECHECKTIMEOUT}
+export USE_DHCP_ROUTES_PRIVATE=${USE_DHCP_ROUTES_PRIVATE}
+export USE_DHCP_ROUTES_PUBLIC=${USE_DHCP_ROUTES_PUBLIC}
+export USE_K3S=${USE_K3S}
+export USE_KEEPALIVED=${USE_KEEPALIVED}
+export USE_ZEROSSL=${USE_ZEROSSL}
+export VC_NETWORK_PRIVATE=${VC_NETWORK_PRIVATE}
+export VC_NETWORK_PUBLIC=${VC_NETWORK_PUBLIC}
+export WORKERNODES=${WORKERNODES}
+export ZEROSSL_EAB_HMAC_SECRET=${ZEROSSL_EAB_HMAC_SECRET}
+export ZEROSSL_EAB_KID=${ZEROSSL_EAB_KID}
+export CLUSTER_NODES=${CLUSTER_NODES}
+EOF
+
+VMWARE_AUTOSCALER_CONFIG=$(cat ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json)
+
+echo -n ${VMWARE_AUTOSCALER_CONFIG} | jq ".image = \"${TARGET_IMAGE}\" | .vmware.\"${NODEGROUP_NAME}\".\"template-name\" = \"${TARGET_IMAGE}\"" > ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
 
 USE_K3S="$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[0].metadata.labels."egress.k3s.io/cluster"//"false"')"
 
@@ -117,11 +190,12 @@ if [ ${USE_K3S} == true ]; then
 
 else
 
+	# Update tools
+	echo_title "Update kubernetes binaries"
 	ADDRESSES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[].status.addresses[]|select(.type == "ExternalIP")|.address')
-
-	for ADDR in $ADDRESSES
+	for ADDR in ${ADDRESSES}
 	do
-		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@$ADDR <<EOF
+		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${ADDR} <<EOF
 			SEED_ARCH=\$([ "\$(uname -m)" == "aarch64" ] && echo -n arm64 || echo -n amd64)
 			cd /usr/local/bin
 			sudo curl -sL --remote-name-all https://storage.googleapis.com/kubernetes-release/release/${KUBERNETES_VERSION}/bin/linux/\${SEED_ARCH}/{kubeadm,kubectl,kube-proxy}
@@ -130,34 +204,43 @@ EOF
 	done
 
 	# Upgrade control plane
+	echo_title "Update control plane nodes"
 	ADDRESSES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[]|select(.metadata.labels.master == "true")|.status.addresses[]|select(.type == "ExternalIP")|.address')
-	for ADDR in $ADDRESSES
+	for ADDR in ${ADDRESSES}
 	do
-		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@$ADDR <<EOF
+		echo_blue_bold "Update node: ${ADDR}"
+		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${ADDR} <<EOF
 			sudo kubeadm upgrade apply ${KUBERNETES_VERSION} --certificate-renewal=false
 EOF
 	done
 
 	# Upgrade worker
+	echo_title "Update worker nodes"
 	ADDRESSES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[]|select(.metadata.labels.worker == "true")|.status.addresses[]|select(.type == "ExternalIP")|.address')
-	for ADDR in $ADDRESSES
+	for ADDR in ${ADDRESSES}
 	do
+		echo_blue_bold "Update node: ${ADDR}"
+		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${ADDR} <<EOF
 		sudo kubeadm upgrade node --certificate-renewal=false
+EOF
 	done
 
-	#Upgrade kubelet
+	# Upgrade kubelet
+	echo_title "Update kubelet"
 	NODES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json)
-	COUNT=$(echo $NODES | jq '.items|length')
+	COUNT=$(echo ${NODES} | jq '.items|length')
 
-	for INDEX in $(seq 1 $COUNT)
+	for INDEX in $(seq 1 ${COUNT})
 	do
-		NODE=$(echo $NODES | jq ".items[$((INDEX-1))]")
-		NODENAME=$(echo $NODE | jq -r .name)
-		ADDR=$(echo $NODE | jq -r '.status.addresses[]|select(.type == "ExternalIP")|.address')
+		NODE=$(echo ${NODES} | jq ".items[$((INDEX-1))]")
+		NODENAME=$(echo ${NODE} | jq -r .name)
+		ADDR=$(echo ${NODE} | jq -r '.status.addresses[]|select(.type == "ExternalIP")|.address')
+
+		echo_blue_bold "Update kubelet: ${ADDR}"
 
 		kubectl drain ${NODENAME} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config --ignore-daemonsets
 
-		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@$ADDR <<EOF
+		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${ADDR} <<EOF
 			SEED_ARCH=\$([ "\$(uname -m)" == "aarch64" ] && echo -n arm64 || echo -n amd64)
 			cd /usr/local/bin
 			sudo curl -sL --remote-name-all https://storage.googleapis.com/kubernetes-release/release/${KUBERNETES_VERSION}/bin/linux/\${SEED_ARCH}/kubelet
@@ -169,5 +252,7 @@ EOF
 	done
 
 fi
+
+source ${PWD}/bin/create-deployment.sh
 
 popd

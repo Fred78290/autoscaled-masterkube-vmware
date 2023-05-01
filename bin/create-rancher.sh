@@ -17,11 +17,11 @@ if [ ${KUBERNETES_MINOR_RELEASE} -lt 26 ]; then
     helm repo add rancher-latest https://releases.rancher.com/server-charts/latest
     helm repo update
 else
-    REPO=./rancher/
+    REPO=/tmp/rancher/
 
-    curl -sL https://releases.rancher.com/server-charts/latest/rancher-2.7.2-rc1.tgz | tar zxvf -
+    curl -sL https://releases.rancher.com/server-charts/latest/rancher-2.7.3.tgz | tar zxvf - -C /tmp
 
-    sed -i -e 's/1.26.0-0/1.26.9-0/' rancher/Chart.yaml
+    sed -i -e 's/1.26.0-0/1.27.9-0/' /tmp/rancher/Chart.yaml
 fi
 
 cat > ${TARGET_DEPLOY_LOCATION}/rancher/rancher.yaml <<EOF
@@ -36,6 +36,10 @@ ingress:
         secretName: tls-rancher-ingress
 tls: ingress
 replicas: 1
+global:
+  cattle:
+    psp:
+      enabled: false
 EOF
 
 helm upgrade -i rancher "${REPO}" \
@@ -45,11 +49,14 @@ helm upgrade -i rancher "${REPO}" \
 
 echo_blue_dot_title "Wait Rancher bootstrap"
 
-while [ -z ${BOOTSTRAP_SECRET} ];
+COUNT=0
+
+while [ -z ${BOOTSTRAP_SECRET} ] && [ $COUNT -lt 120 ];
 do
     BOOTSTRAP_SECRET=$(kubectl get secret --namespace ${K8NAMESPACE} bootstrap-secret -o go-template='{{.data.bootstrapPassword|base64decode}}' 2>/dev/null)
     sleep 1
     echo_blue_dot
+	COUNT=$((COUNT+1))
 done
 
 echo

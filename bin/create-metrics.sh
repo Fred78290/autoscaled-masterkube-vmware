@@ -19,12 +19,12 @@ EOF") | jq . > $ETC_DIR/$1.json
 kubectl apply -f $ETC_DIR/$1.json --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 }
 
+deploy serviceaccount
 deploy clusterrole
 deploy clusterrolebinding
 deploy rolebinding
+deploy system-clusterrole
+deploy system-clusterrolebinding
 deploy apiservice
-deploy serviceaccount
 deploy deployment
 deploy service
-deploy system/clusterrole
-deploy system/clusterrolebinding
