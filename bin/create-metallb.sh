@@ -1,7 +1,7 @@
 #!/bin/bash
 CURDIR=$(dirname $0)
 
-pushd $CURDIR/../
+pushd $CURDIR/../ &>/dev/null
 
 export KUBERNETES_TEMPLATE=./templates/metallb
 export ETC_DIR=${TARGET_DEPLOY_LOCATION}/metallb
@@ -14,8 +14,10 @@ sed "s/__METALLB_IP_RANGE__/$METALLB_IP_RANGE/g" $KUBERNETES_TEMPLATE/metallb.ya
 sed "s/__METALLB_IP_RANGE__/$METALLB_IP_RANGE/g" $KUBERNETES_TEMPLATE/config.yaml > $ETC_DIR/config.yaml
 
 #kubectl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config apply -f $KUBERNETES_TEMPLATE/namespace.yaml
-kubectl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config apply -f $ETC_DIR/metallb.yaml
-kubectl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
+kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f $ETC_DIR/metallb.yaml
+kubectl create secret generic -n metallb-system memberlist --dry-run=client -o json \
+	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
+	--from-literal=secretkey="$(openssl rand -base64 128)" | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 echo -n "Wait MetalLB ready"
 while [ -z "$(kubectl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config get po -n metallb-system 2>/dev/null | grep 'controller')" ];

@@ -10,7 +10,7 @@ set -e
 
 CURDIR=$(dirname $0)
 
-pushd ${CURDIR}/../
+pushd ${CURDIR}/../ &>/dev/null
 
 export PATH=${PWD}/bin:${PATH}
 export DISTRO=jammy
@@ -91,6 +91,7 @@ export AWS_ROUTE53_PUBLIC_ZONE_ID=
 export AWS_ROUTE53_ACCESSKEY=
 export AWS_ROUTE53_SECRETKEY=
 export UPGRADE_CLUSTER=NO
+export MASTER_NODE_ALLOW_DEPLOYMENT=NO
 
 # defined in private govc.defs
 export CERT_EMAIL=
@@ -179,7 +180,7 @@ Options are:
 --delete                                       # Delete cluster and exit
 --distribution                                 # Ubuntu distribution to use ${DISTRO}
 --create-image-only                            # Create image only
---upgrade                                      # Upgrade existing cluster
+--upgrade                                      # Upgrade existing cluster to upper version of kubernetes
 
 ### Flags to set some location informations
 
@@ -636,7 +637,7 @@ if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externalgrpc" ];
     exit
 fi
 
-if [ ${USE_K3S} ]; then
+if [ "${USE_K3S}" == "true" ]; then
 	WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
 
     K3S_CHANNEL=$(curl -s https://update.k3s.io/v1-release/channels)
@@ -651,7 +652,7 @@ if [ ${USE_K3S} ]; then
 	fi
 fi
 
-if [ ${USE_K3S} ]; then
+if [ "${USE_K3S}" == "true" ]; then
     TARGET_IMAGE="${ROOT_IMG_NAME}-k3s-${KUBERNETES_VERSION}-${SEED_ARCH}"
 else
     TARGET_IMAGE="${ROOT_IMG_NAME}-cni-${CNI_PLUGIN}-${KUBERNETES_VERSION}-${CONTAINER_ENGINE}-${SEED_ARCH}"
@@ -792,6 +793,15 @@ if [ ${GRPC_PROVIDER} = "grpc" ]; then
     export CLOUDPROVIDER_CONFIG=${TARGET_CONFIG_LOCATION}/grpc-config.json
 else
     export CLOUDPROVIDER_CONFIG=${TARGET_CONFIG_LOCATION}/grpc-config.yaml
+fi
+
+# For vmware autoscaler
+if [ "$EXTERNAL_ETCD" = "true" ]; then
+    export EXTERNAL_ETCD_ARGS="--use-external-etcd"
+    export ETCD_DST_DIR="/etc/etcd/ssl"
+else
+    export EXTERNAL_ETCD_ARGS="--no-use-external-etcd"
+    export ETCD_DST_DIR="/etc/kubernetes/pki/etcd"
 fi
 
 # Extract the domain name from CERT
@@ -1391,7 +1401,7 @@ CACERT=$(cat ${TARGET_CLUSTER_LOCATION}/ca.cert)
 kubectl create secret generic autoscaler-ssh-keys --dry-run=client -n kube-system -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 	--from-file=id_rsa="${SSH_PRIVATE_KEY}" \
-	--from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" | kubectl apply -f -
+	--from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 echo_title "Write vsphere autoscaler provider config"
 
@@ -1411,15 +1421,6 @@ if [ "${GOVC_INSECURE}" == "1" ]; then
     INSECURE=true
 else
     INSECURE=false
-fi
-
-# For vmware autoscaler
-if [ "$EXTERNAL_ETCD" = "true" ]; then
-    export EXTERNAL_ETCD_ARGS="--use-external-etcd"
-    ETCD_DST_DIR="/etc/etcd/ssl"
-else
-    export EXTERNAL_ETCD_ARGS="--no-use-external-etcd"
-    ETCD_DST_DIR="/etc/kubernetes/pki/etcd"
 fi
 
 AUTOSCALER_CONFIG=$(cat <<EOF
@@ -1549,4 +1550,4 @@ echo "$AUTOSCALER_CONFIG" | jq . > ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-a
 
 source ./bin/create-deployment.sh
 
-popd
+popd &>/dev/null

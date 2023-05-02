@@ -5,11 +5,11 @@ KUBERNETES_MINOR_RELEASE=$(echo -n $KUBERNETES_VERSION | awk -F. '{ print $2 }')
 source ${CURDIR}/common.sh
 
 mkdir -p ${TARGET_DEPLOY_LOCATION}/rancher
-pushd ${TARGET_DEPLOY_LOCATION}
+pushd ${TARGET_DEPLOY_LOCATION} &>/dev/null
 
 export K8NAMESPACE=cattle-system
 
-kubectl create ns ${K8NAMESPACE} --dry-run=client --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o yaml | kubectl apply -f -
+kubectl create ns ${K8NAMESPACE} --dry-run=client --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 if [ ${KUBERNETES_MINOR_RELEASE} -lt 26 ]; then
     REPO=rancher-latest/rancher
@@ -66,4 +66,4 @@ echo_blue_bold "https://rancher-vmware.$DOMAIN_NAME/dashboard/?setup=${BOOTSTRAP
 echo_line
 echo
 
-popd
+popd &>/dev/null

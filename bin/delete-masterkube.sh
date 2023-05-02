@@ -8,7 +8,7 @@ FORCE=NO
 
 source $CURDIR/common.sh
 
-pushd ${CURDIR}/../
+pushd ${CURDIR}/../ &>/dev/null
 
 CONFIGURATION_LOCATION=${PWD}
 GOVCDEFS=${PWD}/bin/govc.defs
@@ -129,4 +129,4 @@ rm -rf ${TARGET_DEPLOY_LOCATION}
 sudo sed -i '' "/${MASTERKUBE}/d" /etc/hosts
 sudo sed -i '' "/masterkube-vmware/d" /etc/hosts
 
-popd
+popd &>/dev/null

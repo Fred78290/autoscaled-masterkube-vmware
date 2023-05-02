@@ -13,7 +13,7 @@ mkdir -p ${TARGET_CLUSTER_LOCATION}
 kubectl config get-contexts ${KUBECONFIG_CONTEXT} &>/dev/null || (echo_red_bold "Cluster ${KUBECONFIG_CONTEXT} not found in kubeconfig" ; exit 1)
 kubectl config set-context ${KUBECONFIG_CONTEXT} &>/dev/null
 
-pushd ${CURDIR}/../
+pushd ${CURDIR}/../ &>/dev/null
 
 source ${PWD}/bin/common.sh
 
@@ -25,6 +25,7 @@ KEEP_SSL_LOCATION=${SSL_LOCATION}
 KEEP_SSH_PRIVATE_KEY=${SSH_PRIVATE_KEY}
 KEEP_SSH_PUBLIC_KEY=${SSH_PUBLIC_KEY}
 KEEP_TARGET_IMAGE=${TARGET_IMAGE}
+KEEP_KUBERNETES_VERSION=${KUBERNETES_VERSION}
 
 function extract_configmap() {
 	local NAMESPACE=$2
@@ -36,7 +37,7 @@ function extract_configmap() {
 	local CONTENT=
 
 	mkdir -p ${DSTDIR}
-	pushd ${DSTDIR}
+	pushd ${DSTDIR} &>/dev/null
 
 	for FILE in ${FILES}
 	do
@@ -45,7 +46,7 @@ function extract_configmap() {
 		echo -n "${CONTENT}" > ${FILE}
 	done
 
-	popd
+	popd &>/dev/null
 }
 
 function extract_deployment() {
@@ -82,6 +83,7 @@ SSL_LOCATION=${KEEP_SSL_LOCATION}
 SSH_PRIVATE_KEY=${KEEP_SSH_PRIVATE_KEY}
 SSH_PUBLIC_KEY=${KEEP_SSH_PUBLIC_KEY}
 TARGET_IMAGE=${KEEP_TARGET_IMAGE}
+KUBERNETES_VERSION=${KEEP_KUBERNETES_VERSION}
 
 if [ ! -f ${TARGET_CLUSTER_LOCATION}/config ]; then
 	cp ${HOME}/.kube/config ${TARGET_CLUSTER_LOCATION}/config
@@ -168,27 +170,37 @@ VMWARE_AUTOSCALER_CONFIG=$(cat ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autos
 
 echo -n ${VMWARE_AUTOSCALER_CONFIG} | jq ".image = \"${TARGET_IMAGE}\" | .vmware.\"${NODEGROUP_NAME}\".\"template-name\" = \"${TARGET_IMAGE}\"" > ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
 
-USE_K3S="$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[0].metadata.labels."egress.k3s.io/cluster"//"false"')"
+source ${PWD}/bin/create-deployment.sh
+
+if [ "${KUBERNETES_VERSION}" == "$(kubectl version --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r .serverVersion.gitVersion)" ]; then
+	echo_blue_bold "Same kubernetes version, upgrade not necessary"
+	exit
+fi
+
+if [ "$LAUNCH_CA" == YES ]; then
+	kubectl delete po -l k8s-app=cluster-autoscaler -n kube-system --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
+fi
 
 if [ ${USE_K3S} == true ]; then
-	mkdir -p ${TARGET_CONFIG_LOCATION}/system-upgrade
+	mkdir -p ${TARGET_DEPLOY_LOCATION}/system-upgrade
 
 	IFS=+ read KUBEVERSION TAILK3S <<< "${KUBERNETES_VERSION}"
 
 	kubectl delete ns system-upgrade --kubeconfig=${TARGET_CLUSTER_LOCATION}/config &>/dev/null || true
 
 	sed -e "s/__KUBEVERSION__/${KUBEVERSION}/g" templates/system-upgrade/system-upgrade-controller.yaml \
-		| tee ${TARGET_CONFIG_LOCATION}/system-upgrade/system-upgrade-controller.yaml \
+		| tee ${TARGET_DEPLOY_LOCATION}/system-upgrade/system-upgrade-controller.yaml \
 		| kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 	kubectl wait --kubeconfig=${TARGET_CLUSTER_LOCATION}/config --namespace system-upgrade --for=condition=ready pod \
 		--selector=upgrade.cattle.io/controller=system-upgrade-controller --timeout=240s
 
 	sed -e "s/__KUBERNETES_VERSION__/${KUBERNETES_VERSION}/g" templates/system-upgrade/system-upgrade-plan.yaml \
-		| tee ${TARGET_CONFIG_LOCATION}/system-upgrade/system-upgrade-plan.yaml \
+		| tee ${TARGET_DEPLOY_LOCATION}/system-upgrade/system-upgrade-plan.yaml \
 		| kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 else
+	IFS=. read VERSION MAJOR MINOR <<< "$KUBERNETES_VERSION"
 
 	# Update tools
 	echo_title "Update kubernetes binaries"
@@ -210,7 +222,11 @@ EOF
 	do
 		echo_blue_bold "Update node: ${ADDR}"
 		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${ADDR} <<EOF
-			sudo kubeadm upgrade apply ${KUBERNETES_VERSION} --certificate-renewal=false
+			if [ ${MAJOR} -ge 27 ] && [ -f /etc/kubernetes/kubeadm-config.yaml ]; then
+				sudo sed -i '/container-runtime:/d' /etc/kubernetes/kubeadm-config.yaml
+			fi
+
+			sudo kubeadm upgrade apply ${KUBERNETES_VERSION} --yes --certificate-renewal=false
 EOF
 	done
 
@@ -221,7 +237,7 @@ EOF
 	do
 		echo_blue_bold "Update node: ${ADDR}"
 		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${ADDR} <<EOF
-		sudo kubeadm upgrade node --certificate-renewal=false
+		sudo kubeadm upgrade node
 EOF
 	done
 
@@ -233,26 +249,31 @@ EOF
 	for INDEX in $(seq 1 ${COUNT})
 	do
 		NODE=$(echo ${NODES} | jq ".items[$((INDEX-1))]")
-		NODENAME=$(echo ${NODE} | jq -r .name)
+		NODENAME=$(echo ${NODE} | jq -r .metadata.name)
 		ADDR=$(echo ${NODE} | jq -r '.status.addresses[]|select(.type == "ExternalIP")|.address')
 
-		echo_blue_bold "Update kubelet: ${ADDR}"
+		echo_blue_bold "Update kubelet for node: ${NODENAME}"
 
-		kubectl drain ${NODENAME} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config --ignore-daemonsets
+		kubectl cordon ${NODENAME} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 
 		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${ADDR} <<EOF
+			if [ ${MAJOR} -ge 27 ] && [ -f /var/lib/kubelet/kubeadm-flags.env ]; then
+				sudo sed -i -E 's/--container-runtime=\w+//' /var/lib/kubelet/kubeadm-flags.env
+			fi 
+
 			SEED_ARCH=\$([ "\$(uname -m)" == "aarch64" ] && echo -n arm64 || echo -n amd64)
+			sudo systemctl stop kubelet
 			cd /usr/local/bin
 			sudo curl -sL --remote-name-all https://storage.googleapis.com/kubernetes-release/release/${KUBERNETES_VERSION}/bin/linux/\${SEED_ARCH}/kubelet
 			sudo chmod +x /usr/local/bin/kubelet
-			sudo kubectl restart kubelet
+			sudo systemctl start kubelet
 EOF
 
-		kubectl uncordon ${NODENAME} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config --ignore-daemonsets
+		kubectl uncordon ${NODENAME} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
+
+		echo_blue_bold "Kubelet upgraded for node: ${NODENAME}"
 	done
 
 fi
 
-source ${PWD}/bin/create-deployment.sh
-
-popd
+popd &>/dev/null

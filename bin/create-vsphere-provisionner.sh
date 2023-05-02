@@ -4,7 +4,7 @@
 
 CURDIR=$(dirname $0)
 
-pushd $CURDIR/../
+pushd $CURDIR/../ &>/dev/null
 
 export KUBERNETES_TEMPLATE=./templates/vsphere-storage
 export ETC_DIR=${TARGET_DEPLOY_LOCATION}/vsphere-storage

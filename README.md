@@ -93,6 +93,7 @@ During the process the script will create many files located in
 | `--delete` | Delete cluster and exit  | |
 | `--distribution=<value>` | Ubuntu distribution to use ${DISTRO}  | |
 | `--create-image-only`| Create image only and exit ||
+| `--upgrade`| Upgrade existing cluster to upper version of kubernetes ||
 | **Flags to set some location informations** |
 | `--configuration-location=<path>` | Specify where configuration will be stored | current directory |
 | `--ssl-location=<path>` | Specify where the etc/ssl dir is stored | ./etc/ssl|
@@ -187,3 +188,7 @@ To scale fresh masterkube `kubectl scale --replicas=2 deploy/helloworld -n kube-
 
 To delete the master kube and associated worker nodes, just run the command [delete-masterkube.sh](./bin/delete-masterkube.sh).
 If the create process fail for any reason, you can use flag **--force**
+
+## Upgrade existing cluster
+
+To upgrade cluster with an upper version of kubernetes, just run `create-masterkube.sh --upgrade --kubernetes-version=<upper version>`

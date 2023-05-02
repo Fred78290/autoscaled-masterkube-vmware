@@ -68,7 +68,7 @@ mkdir -p ${SSL_LOCATION}/
 
 WILDCARD="*.${ACM_DOMAIN_NAME}"
 
-pushd ${SSL_LOCATION}
+pushd ${SSL_LOCATION} &>/dev/null
 
 cat > ca-config.json <<EOF
 {
@@ -150,4 +150,4 @@ cat cert.pem ca.pem > chain.pem
 cat cert.pem ca.pem privkey.pem > fullchain.pem
 chmod 644 *
 
-popd
+popd &>/dev/null
