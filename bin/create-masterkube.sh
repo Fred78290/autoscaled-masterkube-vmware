@@ -10,7 +10,7 @@ set -e
 
 CURDIR=$(dirname $0)
 
-pushd ${CURDIR}/../
+pushd ${CURDIR}/../ &>/dev/null
 
 export PATH=${PWD}/bin:${PATH}
 export DISTRO=jammy
@@ -90,6 +90,8 @@ export GOVCDEFS=${CONFIGURATION_LOCATION}/bin/govc.defs
 export AWS_ROUTE53_PUBLIC_ZONE_ID=
 export AWS_ROUTE53_ACCESSKEY=
 export AWS_ROUTE53_SECRETKEY=
+export UPGRADE_CLUSTER=NO
+export MASTER_NODE_ALLOW_DEPLOYMENT=NO
 
 # defined in private govc.defs
 export CERT_EMAIL=
@@ -141,11 +143,11 @@ function build_routes() {
         local VIA=
         local METRIC=500
 
-        IFS=, read -a DEFS <<<$ROUTE
+        IFS=, read -a DEFS <<< "$ROUTE"
 
         for DEF in ${DEFS[@]}
         do
-            IFS== read KEY VALUE <<<$DEF
+            IFS== read KEY VALUE <<< "$DEF"
             case $KEY in
                 to)
                     TO=$VALUE
@@ -178,6 +180,7 @@ Options are:
 --delete                                       # Delete cluster and exit
 --distribution                                 # Ubuntu distribution to use ${DISTRO}
 --create-image-only                            # Create image only
+--upgrade                                      # Upgrade existing cluster to upper version of kubernetes
 
 ### Flags to set some location informations
 
@@ -274,7 +277,7 @@ Options are:
 EOF
 }
 
-TEMP=$(getopt -o xvheucrk:n:p:s:t: --long use-k3s,cloudprovider:,route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
+TEMP=$(getopt -o xvheucrk:n:p:s:t: --long upgrade,use-k3s,cloudprovider:,route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 
 eval set -- "$TEMP"
 
@@ -291,6 +294,10 @@ while true; do
         ROOT_IMG_NAME=${DISTRO}-kubernetes
         shift 2
         ;;
+	--upgrade)
+		UPGRADE_CLUSTER=YES
+		shift
+		;;
     -v|--verbose)
         SILENT=
         shift 1
@@ -620,12 +627,17 @@ while true; do
     esac
 done
 
+if [ "${UPGRADE_CLUSTER}" == "YES" ] && [ "${DELETE_CLUSTER}" = "YES" ]; then
+    echo_red_bold "Can't upgrade deleted cluster, exit"
+    exit
+fi
+
 if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externalgrpc" ]; then
     echo_red_bold "Unsupported cloud provider: ${GRPC_PROVIDER}, only grpc|externalgrpc, exit"
     exit
 fi
 
-if [ ${USE_K3S} ]; then
+if [ "${USE_K3S}" == "true" ]; then
 	WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
 
     K3S_CHANNEL=$(curl -s https://update.k3s.io/v1-release/channels)
@@ -640,7 +652,7 @@ if [ ${USE_K3S} ]; then
 	fi
 fi
 
-if [ ${USE_K3S} ]; then
+if [ "${USE_K3S}" == "true" ]; then
     TARGET_IMAGE="${ROOT_IMG_NAME}-k3s-${KUBERNETES_VERSION}-${SEED_ARCH}"
 else
     TARGET_IMAGE="${ROOT_IMG_NAME}-cni-${CNI_PLUGIN}-${KUBERNETES_VERSION}-${CONTAINER_ENGINE}-${SEED_ARCH}"
@@ -777,15 +789,34 @@ if [ "${CREATE_IMAGE_ONLY}" = "YES" ]; then
     exit 0
 fi
 
+if [ ${GRPC_PROVIDER} = "grpc" ]; then
+    export CLOUDPROVIDER_CONFIG=grpc-config.json
+else
+    export CLOUDPROVIDER_CONFIG=grpc-config.yaml
+fi
+
+# For vmware autoscaler
+if [ "$EXTERNAL_ETCD" = "true" ]; then
+    export EXTERNAL_ETCD_ARGS="--use-external-etcd"
+    export ETCD_DST_DIR="/etc/etcd/ssl"
+else
+    export EXTERNAL_ETCD_ARGS="--no-use-external-etcd"
+    export ETCD_DST_DIR="/etc/kubernetes/pki/etcd"
+fi
+
 # Extract the domain name from CERT
 export DOMAIN_NAME=$(openssl x509 -noout -subject -in ${SSL_LOCATION}/cert.pem -nameopt sep_multiline | grep 'CN=' | awk -F= '{print $2}' | sed -e 's/^[\s\t]*//')
 
 # Delete previous exixting version
-if [ "$RESUME" = "NO" ]; then
+if [ "$RESUME" = "NO" ] && [ "${UPGRADE_CLUSTER}" == "NO" ]; then
     echo_title "Launch custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
     delete-masterkube.sh --configuration-location=${CONFIGURATION_LOCATION} --govc-defs=${GOVCDEFS} --node-group=${NODEGROUP_NAME}
-else
+elif [ "${UPGRADE_CLUSTER}" == "NO" ]; then
     echo_title "Resume custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
+else
+    echo_title "Upgrade ${MASTERKUBE} instance with ${TARGET_IMAGE}"
+	./bin/upgrade-cluster.sh
+	exit
 fi
 
 mkdir -p ${TARGET_CONFIG_LOCATION}
@@ -794,77 +825,77 @@ mkdir -p ${TARGET_CLUSTER_LOCATION}
 if [ "$RESUME" = "NO" ]; then
     cat ${GOVCDEFS} > ${TARGET_CONFIG_LOCATION}/buildenv
     cat > ${TARGET_CONFIG_LOCATION}/buildenv <<EOF
-export TARGET_CONFIG_LOCATION=${TARGET_CONFIG_LOCATION}
-export TARGET_DEPLOY_LOCATION=${TARGET_DEPLOY_LOCATION}
-export TARGET_CLUSTER_LOCATION=${TARGET_CLUSTER_LOCATION}
-export SSL_LOCATION=${SSL_LOCATION}
-export PUBLIC_DOMAIN_NAME=${PUBLIC_DOMAIN_NAME}
-export PUBLIC_IP="$PUBLIC_IP"
-export SCHEME="$SCHEME"
-export NODEGROUP_NAME="$NODEGROUP_NAME"
-export MASTERKUBE="$MASTERKUBE"
-export SSH_PRIVATE_KEY=$SSH_PRIVATE_KEY
-export SSH_PUBLIC_KEY=$SSH_PUBLIC_KEY
-export SSH_KEY="$SSH_KEY"
-export SSH_KEY_FNAME=$SSH_KEY_FNAME
-export KUBERNETES_VERSION=$KUBERNETES_VERSION
-export KUBERNETES_USER=${KUBERNETES_USER}
-export KUBERNETES_PASSWORD=$KUBERNETES_PASSWORD
-export KUBECONFIG=$KUBECONFIG
-export SEED_USER=$SEED_USER
-export SEED_IMAGE="$SEED_IMAGE"
-export ROOT_IMG_NAME=$ROOT_IMG_NAME
-export TARGET_IMAGE=$TARGET_IMAGE
+export AWS_ROUTE53_ACCESSKEY=${AWS_ROUTE53_ACCESSKEY}
+export AWS_ROUTE53_PUBLIC_ZONE_ID=${AWS_ROUTE53_PUBLIC_ZONE_ID}
+export AWS_ROUTE53_SECRETKEY=${AWS_ROUTE53_SECRETKEY}
+export CLOUDPROVIDER_CONFIG=${CLOUDPROVIDER_CONFIG}
 export CNI_PLUGIN=$CNI_PLUGIN
 export CNI_VERSION=$CNI_VERSION
-export HA_CLUSTER=$HA_CLUSTER
 export CONTROLNODES=$CONTROLNODES
-export WORKERNODES=$WORKERNODES
-export MINNODES=$MINNODES
-export MAXNODES=$MAXNODES
-export MAXTOTALNODES=$MAXTOTALNODES
 export CORESTOTAL="$CORESTOTAL"
-export MEMORYTOTAL="$MEMORYTOTAL"
-export MAXAUTOPROVISIONNEDNODEGROUPCOUNT=$MAXAUTOPROVISIONNEDNODEGROUPCOUNT
-export SCALEDOWNENABLED=$SCALEDOWNENABLED
-export SCALEDOWNDELAYAFTERADD=$SCALEDOWNDELAYAFTERADD
-export SCALEDOWNDELAYAFTERDELETE=$SCALEDOWNDELAYAFTERDELETE
-export SCALEDOWNDELAYAFTERFAILURE=$SCALEDOWNDELAYAFTERFAILURE
-export SCALEDOWNUNEEDEDTIME=$SCALEDOWNUNEEDEDTIME
-export SCALEDOWNUNREADYTIME=$SCALEDOWNUNREADYTIME
 export DEFAULT_MACHINE=$DEFAULT_MACHINE
-export UNREMOVABLENODERECHECKTIMEOUT=$UNREMOVABLENODERECHECKTIMEOUT
-export OSDISTRO=$OSDISTRO
-export TRANSPORT=$TRANSPORT
-export NET_DOMAIN=$NET_DOMAIN
-export NET_IP=$NET_IP
-export NET_GATEWAY=$NET_GATEWAY
-export NET_DNS=$NET_DNS
-export NET_MASK=$NET_MASK
-export NET_MASK_CIDR=$NET_MASK_CIDR
-export VC_NETWORK_PRIVATE=$VC_NETWORK_PRIVATE
-export USE_DHCP_ROUTES_PRIVATE=$USE_DHCP_ROUTES_PRIVATE
-export VC_NETWORK_PUBLIC=$VC_NETWORK_PUBLIC
-export USE_DHCP_ROUTES_PUBLIC=$USE_DHCP_ROUTES_PUBLIC
-export REGISTRY=$REGISTRY
-export LAUNCH_CA=$LAUNCH_CA
-export CLUSTER_LB=$CLUSTER_LB
-export USE_KEEPALIVED=$USE_KEEPALIVED
 export EXTERNAL_ETCD=$EXTERNAL_ETCD
 export FIRSTNODE=$FIRSTNODE
+export GODADDY_API_KEY=${GODADDY_API_KEY}
+export GODADDY_API_SECRET=${GODADDY_API_SECRET}
+export GRPC_PROVIDER=${GRPC_PROVIDER}
+export HA_CLUSTER=$HA_CLUSTER
+export KUBECONFIG=$KUBECONFIG
+export KUBERNETES_PASSWORD=$KUBERNETES_PASSWORD
+export KUBERNETES_USER=${KUBERNETES_USER}
+export KUBERNETES_VERSION=$KUBERNETES_VERSION
+export LAUNCH_CA=$LAUNCH_CA
+export MASTERKUBE="$MASTERKUBE"
+export MAXAUTOPROVISIONNEDNODEGROUPCOUNT=$MAXAUTOPROVISIONNEDNODEGROUPCOUNT
+export MAXNODES=$MAXNODES
+export MAXTOTALNODES=$MAXTOTALNODES
+export MEMORYTOTAL="$MEMORYTOTAL"
+export MINNODES=$MINNODES
+export NET_DNS=$NET_DNS
+export NET_DOMAIN=$NET_DOMAIN
+export NET_GATEWAY=$NET_GATEWAY
+export NET_IP=$NET_IP
+export NET_MASK_CIDR=$NET_MASK_CIDR
+export NET_MASK=$NET_MASK
 export NFS_SERVER_ADDRESS=$NFS_SERVER_ADDRESS
 export NFS_SERVER_PATH=$NFS_SERVER_PATH
 export NFS_STORAGE_CLASS=$NFS_STORAGE_CLASS
-export USE_ZEROSSL=${USE_ZEROSSL}
-export ZEROSSL_EAB_KID=${ZEROSSL_EAB_KID}
-export ZEROSSL_EAB_HMAC_SECRET=${ZEROSSL_EAB_HMAC_SECRET}
-export GODADDY_API_KEY=${GODADDY_API_KEY}
-export GODADDY_API_SECRET=${GODADDY_API_SECRET}
-export AWS_ROUTE53_PUBLIC_ZONE_ID=${AWS_ROUTE53_PUBLIC_ZONE_ID}
-export AWS_ROUTE53_ACCESSKEY=${AWS_ROUTE53_ACCESSKEY}
-export AWS_ROUTE53_SECRETKEY=${AWS_ROUTE53_SECRETKEY}
-export GRPC_PROVIDER=${GRPC_PROVIDER}
+export NODEGROUP_NAME="$NODEGROUP_NAME"
+export OSDISTRO=$OSDISTRO
+export PUBLIC_DOMAIN_NAME=${PUBLIC_DOMAIN_NAME}
+export PUBLIC_IP="$PUBLIC_IP"
+export REGISTRY=$REGISTRY
+export ROOT_IMG_NAME=$ROOT_IMG_NAME
+export SCALEDOWNDELAYAFTERADD=$SCALEDOWNDELAYAFTERADD
+export SCALEDOWNDELAYAFTERDELETE=$SCALEDOWNDELAYAFTERDELETE
+export SCALEDOWNDELAYAFTERFAILURE=$SCALEDOWNDELAYAFTERFAILURE
+export SCALEDOWNENABLED=$SCALEDOWNENABLED
+export SCALEDOWNUNEEDEDTIME=$SCALEDOWNUNEEDEDTIME
+export SCALEDOWNUNREADYTIME=$SCALEDOWNUNREADYTIME
+export SCHEME="$SCHEME"
+export SEED_IMAGE="$SEED_IMAGE"
+export SEED_USER=$SEED_USER
+export SSH_KEY_FNAME=$SSH_KEY_FNAME
+export SSH_KEY="$SSH_KEY"
+export SSH_PRIVATE_KEY=$SSH_PRIVATE_KEY
+export SSH_PUBLIC_KEY=$SSH_PUBLIC_KEY
+export SSL_LOCATION=${SSL_LOCATION}
+export TARGET_CLUSTER_LOCATION=${TARGET_CLUSTER_LOCATION}
+export TARGET_CONFIG_LOCATION=${TARGET_CONFIG_LOCATION}
+export TARGET_DEPLOY_LOCATION=${TARGET_DEPLOY_LOCATION}
+export TARGET_IMAGE=$TARGET_IMAGE
+export TRANSPORT=$TRANSPORT
+export UNREMOVABLENODERECHECKTIMEOUT=$UNREMOVABLENODERECHECKTIMEOUT
+export USE_DHCP_ROUTES_PRIVATE=$USE_DHCP_ROUTES_PRIVATE
+export USE_DHCP_ROUTES_PUBLIC=$USE_DHCP_ROUTES_PUBLIC
 export USE_K3S=${USE_K3S}
+export USE_KEEPALIVED=$USE_KEEPALIVED
+export USE_ZEROSSL=${USE_ZEROSSL}
+export VC_NETWORK_PRIVATE=$VC_NETWORK_PRIVATE
+export VC_NETWORK_PUBLIC=$VC_NETWORK_PUBLIC
+export WORKERNODES=$WORKERNODES
+export ZEROSSL_EAB_HMAC_SECRET=${ZEROSSL_EAB_HMAC_SECRET}
+export ZEROSSL_EAB_KID=${ZEROSSL_EAB_KID}
 EOF
 else
     source ${TARGET_CONFIG_LOCATION}/buildenv
@@ -902,7 +933,7 @@ IPADDRS=()
 NODE_IP=$NET_IP
 
 if [ "$PUBLIC_IP" != "DHCP" ]; then
-    IFS=/ read PUBLIC_NODE_IP PUBLIC_MASK_CIDR <<< $PUBLIC_IP
+    IFS=/ read PUBLIC_NODE_IP PUBLIC_MASK_CIDR <<< "$PUBLIC_IP"
 else
     PUBLIC_NODE_IP=DHCP
 fi
@@ -1359,21 +1390,23 @@ do
     echo_separator
 done
 
+kubeconfig-merge.sh ${MASTERKUBE} ${TARGET_CLUSTER_LOCATION}/config
+
 echo_blue_bold "create cluster done"
 
 MASTER_IP=$(cat ${TARGET_CLUSTER_LOCATION}/manager-ip)
 TOKEN=$(cat ${TARGET_CLUSTER_LOCATION}/token)
 CACERT=$(cat ${TARGET_CLUSTER_LOCATION}/ca.cert)
 
-kubectl create secret generic autoscaler-ssh-keys -n kube-system --from-file=id_rsa="${SSH_PRIVATE_KEY}" --from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
-
-kubeconfig-merge.sh ${MASTERKUBE} ${TARGET_CLUSTER_LOCATION}/config
+kubectl create secret generic autoscaler-ssh-keys -n kube-system --dry-run=client -o yaml \
+	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
+	--from-file=id_rsa="${SSH_PRIVATE_KEY}" \
+	--from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 echo_title "Write vsphere autoscaler provider config"
 
 if [ ${GRPC_PROVIDER} = "grpc" ]; then
-    CLOUDPROVIDER_CONFIG=${TARGET_CONFIG_LOCATION}/grpc-config.json
-    cat > ${CLOUDPROVIDER_CONFIG} <<EOF
+    cat > ${TARGET_CONFIG_LOCATION}/${CLOUDPROVIDER_CONFIG} <<EOF
     {
         "address": "$CONNECTTO",
         "secret": "vmware",
@@ -1381,23 +1414,13 @@ if [ ${GRPC_PROVIDER} = "grpc" ]; then
     }
 EOF
 else
-    CLOUDPROVIDER_CONFIG=${TARGET_CONFIG_LOCATION}/grpc-config.yaml
-    echo "address: $CONNECTTO" > ${CLOUDPROVIDER_CONFIG}
+    echo "address: $CONNECTTO" > ${TARGET_CONFIG_LOCATION}/${CLOUDPROVIDER_CONFIG}
 fi
 
 if [ "${GOVC_INSECURE}" == "1" ]; then
     INSECURE=true
 else
     INSECURE=false
-fi
-
-# For vmware autoscaler
-if [ "$EXTERNAL_ETCD" = "true" ]; then
-    export EXTERNAL_ETCD_ARGS="--use-external-etcd"
-    ETCD_DST_DIR="/etc/etcd/ssl"
-else
-    export EXTERNAL_ETCD_ARGS="--no-use-external-etcd"
-    ETCD_DST_DIR="/etc/kubernetes/pki/etcd"
 fi
 
 AUTOSCALER_CONFIG=$(cat <<EOF
@@ -1525,67 +1548,6 @@ EOF
 
 echo "$AUTOSCALER_CONFIG" | jq . > ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
 
-# Recopy config file on master node
-kubectl create configmap config-cluster-autoscaler --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
-	--from-file ${CLOUDPROVIDER_CONFIG} \
-	--from-file ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
+source ./bin/create-deployment.sh
 
-kubectl create configmap kubernetes-pki --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
-	--from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki
-
-if [ "${EXTERNAL_ETCD}" = "true" ]; then
-    kubectl create secret generic etcd-ssl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
-        --from-file ${TARGET_CLUSTER_LOCATION}/etcd/ssl
-else
-    kubectl create secret generic etcd-ssl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system \
-        --from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki/etcd
-fi
-
-# Create Pods
-echo_title "= Create VSphere CSI provisionner"
-create-vsphere-provisionner.sh
-
-echo_title "= Create MetalLB"
-create-metallb.sh
-
-echo_title "= Create CERT Manager"
-create-cert-manager.sh
-
-echo_title "= Create NFS provisionner"
-create-nfs-provisionner.sh
-
-echo_title "= Create Ingress Controller"
-create-ingress-controller.sh
-
-echo_title "= Create Kubernetes dashboard"
-create-dashboard.sh
-
-echo_title "= Create Kubernetes metric scraper"
-create-metrics.sh
-
-echo_title "= Create Rancher"
-create-rancher.sh
-
-echo_title "= Create Sample hello"
-create-helloworld.sh
-
-echo_title "= Create External DNS"
-create-external-dns.sh
-
-if [ "$LAUNCH_CA" != "NO" ]; then
-    create-autoscaler.sh $LAUNCH_CA
-fi
-
-NGINX_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-
-sudo sed -i -e "/masterkube-vmware/d" /etc/hosts
-sudo bash -c "echo '${NGINX_IP} masterkube-vmware.${DOMAIN_NAME} ${DASHBOARD_HOSTNAME}.${DOMAIN_NAME}' >> /etc/hosts"
-
-# Add cluster config in configmap
-kubectl create configmap masterkube-config -n kube-system \
-    --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
-	--from-file ${TARGET_CLUSTER_LOCATION}/ca.cert \
-    --from-file ${TARGET_CLUSTER_LOCATION}/dashboard-token \
-    --from-file ${TARGET_CLUSTER_LOCATION}/token
-
-popd
+popd &>/dev/null

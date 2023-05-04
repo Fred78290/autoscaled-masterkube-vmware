@@ -3,7 +3,7 @@ LAUNCH_CA=$1
 
 CURDIR=$(dirname $0)
 
-pushd $CURDIR/../
+pushd $CURDIR/../ &>/dev/null
 
 MASTER_IP=$(cat ${TARGET_CLUSTER_LOCATION}/manager-ip)
 TOKEN=$(cat ${TARGET_CLUSTER_LOCATION}/token)
@@ -21,22 +21,24 @@ export USE_VANILLA_GRPC_ARGS=--no-use-vanilla-grpc
 
 if [ "${GRPC_PROVIDER}" = "externalgrpc" ]; then
     USE_VANILLA_GRPC_ARGS=--use-vanilla-grpc
-    AUTOSCALER_REGISTRY=k8s.gcr.io/autoscaling
+    AUTOSCALER_REGISTRY=registry.k8s.io/autoscaling
     CLOUDPROVIDER_CONFIG=/etc/cluster/grpc-config.yaml
 fi
 
 case $KUBERNETES_MINOR_RELEASE in
     25)
         CLUSTER_AUTOSCALER_VERSION=v1.25.6
-        VSPHERE_AUTOSCALER_VERSION=v1.25.7
+        VSPHERE_AUTOSCALER_VERSION=v1.25.9
         ;;
     26)
         CLUSTER_AUTOSCALER_VERSION=v1.26.1
-        VSPHERE_AUTOSCALER_VERSION=v1.26.2
+        VSPHERE_AUTOSCALER_VERSION=v1.26.4
         ;;
     27)
         CLUSTER_AUTOSCALER_VERSION=v1.27.1
         VSPHERE_AUTOSCALER_VERSION=v1.27.1
+		# Not yet published
+	    AUTOSCALER_REGISTRY=$REGISTRY
         ;;
     *)
         echo "Former version aren't supported by vmware autoscaler"
@@ -49,9 +51,7 @@ function deploy {
     echo "Create $ETC_DIR/$1.json"
 echo $(eval "cat <<EOF
 $(<$KUBERNETES_TEMPLATE/$1.json)
-EOF") | jq . > $ETC_DIR/$1.json
-
-kubectl apply -f $ETC_DIR/$1.json --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
+EOF") | jq . | tee $ETC_DIR/$1.json | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f $ETC_DIR/$1.json
 }
 
 deploy service-account-autoscaler
@@ -82,4 +82,4 @@ else
     deploy deployment
 fi
 
-popd
+popd &>/dev/null

@@ -4,7 +4,7 @@
 
 CURDIR=$(dirname $0)
 
-pushd $CURDIR/../
+pushd $CURDIR/../ &>/dev/null
 
 export KUBERNETES_TEMPLATE=./templates/vsphere-storage
 export ETC_DIR=${TARGET_DEPLOY_LOCATION}/vsphere-storage
@@ -145,14 +145,14 @@ EOF
 sed -e "s/__REPLICAS__/$REPLICAS/g" -e "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-csi-driver.yaml > ${ETC_DIR}/vsphere-csi-driver.yaml
 sed "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-cloud-controller-manager-ds.yaml > ${ETC_DIR}/vsphere-cloud-controller-manager-ds.yaml
 
-kubectl create ns vmware-system-csi --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
-    --dry-run=client -o json | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
+kubectl create ns vmware-system-csi --dry-run=client -o yaml \
+	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f ${ETC_DIR}/cpi-${NODEGROUP_NAME}-secret.yaml
 
-kubectl create configmap cloud-config --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
-    --from-file=${ETC_DIR}/vsphere.conf -n=kube-system --dry-run=client -o json \
-    | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
+kubectl create configmap cloud-config -n=kube-system --dry-run=client -o yaml \
+	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
+    --from-file=${ETC_DIR}/vsphere.conf | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
     -f ${KUBERNETES_TEMPLATE}/cloud-controller-manager-roles.yaml
@@ -163,10 +163,9 @@ kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
     -f ${ETC_DIR}/vsphere-cloud-controller-manager-ds.yaml
 
-kubectl create secret generic vsphere-config-secret --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
-    -n vmware-system-csi --dry-run=client -o json \
-    --from-file=${ETC_DIR}/csi-vsphere.conf \
-    | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
+kubectl create secret generic vsphere-config-secret -n vmware-system-csi --dry-run=client -o yaml \
+	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
+    --from-file=${ETC_DIR}/csi-vsphere.conf | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f ${ETC_DIR}/vsphere-csi-driver.yaml
 

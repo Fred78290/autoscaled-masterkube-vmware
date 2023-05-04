@@ -114,10 +114,10 @@ cat > ${TARGET_CLUSTER_LOCATION}/etcd/etcd-csr.json <<EOF
 }
 EOF
 
-pushd ${TARGET_CLUSTER_LOCATION}/etcd
+pushd ${TARGET_CLUSTER_LOCATION}/etcd &>/dev/null
 cfssl gencert -initca ca-csr.json | cfssljson -bare ./ssl/ca
 cfssl gencert -ca=./ssl/ca.pem -ca-key=./ssl/ca-key.pem -config=ca-config.json -profile=kubernetes etcd-csr.json | cfssljson -bare ./ssl/etcd
-popd
+popd &>/dev/null
 
 for INDEX in "${!ETCDHOSTS[@]}";
 do

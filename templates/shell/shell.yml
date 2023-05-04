@@ -21,7 +21,7 @@ spec:
           effect: NoSchedule
       containers:
       - name: ubuntu-shell
-        image: fred78290/ubuntu:jammy
+        image: ubuntu:jammy
         command: 
           - /bin/sh
           - -c

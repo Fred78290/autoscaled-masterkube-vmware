@@ -159,7 +159,7 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
     else
         echo_blue_bold "Import ${DISTRO}-server-cloudimg-${SEED_ARCH}.ova to ${SEEDIMAGE} with ovftool"
 
-        MAPPED_NETWORK=$(govc import.spec ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova | jq .NetworkMapping[0].Name | tr -d '"')
+        MAPPED_NETWORK=$(govc import.spec ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.ova | jq -r '.NetworkMapping[0].Name//""')
 
         ovftool \
             --acceptAllEulas \
@@ -476,7 +476,7 @@ SHELL
         echo "Install Containerd"
         echo "==============================================================================================================================="
 
-        curl -sL  https://github.com/containerd/containerd/releases/download/v1.6.15/cri-containerd-cni-1.6.15-linux-${SEED_ARCH}.tar.gz | tar -C / -xz
+        curl -sL  https://github.com/containerd/containerd/releases/download/v1.7.0/cri-containerd-cni-1.7.0-linux-${SEED_ARCH}.tar.gz | tar -C / -xz
 
         mkdir -p /etc/containerd
         containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/g' | tee /etc/containerd/config.toml
@@ -484,7 +484,7 @@ SHELL
         systemctl enable containerd.service
         systemctl restart containerd
 
-        curl -sL  https://github.com/containerd/nerdctl/releases/download/v1.1.0/nerdctl-1.1.0-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
+        curl -sL  https://github.com/containerd/nerdctl/releases/download/v1.3.1/nerdctl-1.3.1-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
     else
 
         echo "==============================================================================================================================="
@@ -515,6 +515,7 @@ SHELL
     echo "= Clean ubuntu distro"
     echo "==============================================================================================================================="
     apt-get autoremove -y
+	apt-get autoclean -y
     echo
 
     echo "==============================================================================================================================="
@@ -563,9 +564,9 @@ ExecStart=/usr/local/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $
 SHELL
 
     if [ -z "${AWS_ACCESS_KEY_ID}" ] && [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
-        echo 'KUBELET_EXTRA_ARGS="--cloud-provider=external --fail-swap-on=false --read-only-port=10255"' > /etc/default/kubelet
+        echo "KUBELET_EXTRA_ARGS='--cloud-provider=external --fail-swap-on=false --read-only-port=10255'" > /etc/default/kubelet
     else
-        echo 'KUBELET_EXTRA_ARGS="--image-credential-provider-config=${CREDENTIALS_CONFIG} --image-credential-provider-bin-dir=${CREDENTIALS_BIN} --cloud-provider=external --fail-swap-on=false --read-only-port=10255"' > /etc/default/kubelet
+        echo "KUBELET_EXTRA_ARGS='--image-credential-provider-config=${CREDENTIALS_CONFIG} --image-credential-provider-bin-dir=${CREDENTIALS_BIN} --cloud-provider=external --fail-swap-on=false --read-only-port=10255'" > /etc/default/kubelet
     fi
 
     echo 'export PATH=/opt/cni/bin:$PATH' >> /etc/profile.d/apps-bin-path.sh
@@ -593,7 +594,7 @@ SHELL
         mv calicoctl-linux-${SEED_ARCH} /usr/local/bin/calicoctl
         pull_image https://docs.projectcalico.org/manifests/calico-vxlan.yaml
     elif [ "$CNI_PLUGIN" = "flannel" ]; then
-        pull_image https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+        pull_image https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
     elif [ "$CNI_PLUGIN" = "weave" ]; then
         pull_image "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
     elif [ "$CNI_PLUGIN" = "canal" ]; then

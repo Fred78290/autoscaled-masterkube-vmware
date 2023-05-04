@@ -26,6 +26,7 @@ function echo_blue_bold() {
 
 function echo_title() {
 	# echo message in blue and bold
+	echo
     echo_line
 	echo_blue_bold "$1"
     echo_line

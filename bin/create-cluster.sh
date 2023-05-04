@@ -25,7 +25,7 @@ EXTERNAL_ETCD=false
 NODEINDEX=0
 CONTAINER_ENGINE=docker
 CONTAINER_RUNTIME=docker
-CONTAINER_CTL=/var/run/dockershim.sock
+CONTAINER_CTL=unix:///var/run/dockershim.sock
 K8_OPTIONS="--ignore-preflight-errors=All --config=${KUBEADM_CONFIG}"
 VMUUID=
 CSI_REGION=home
@@ -75,17 +75,17 @@ while true; do
             "docker")
                 CONTAINER_ENGINE="docker"
                 CONTAINER_RUNTIME=docker
-                CONTAINER_CTL=/var/run/dockershim.sock
+                CONTAINER_CTL=unix:///var/run/dockershim.sock
                 ;;
             "containerd")
                 CONTAINER_ENGINE="$2"
                 CONTAINER_RUNTIME=remote
-                CONTAINER_CTL=/var/run/containerd/containerd.sock
+                CONTAINER_CTL=unix:///var/run/containerd/containerd.sock
                 ;;
             "cri-o")
                 CONTAINER_ENGINE="$2"
                 CONTAINER_RUNTIME=remote
-                CONTAINER_CTL=/var/run/crio/crio.sock
+                CONTAINER_CTL=unix:///var/run/crio/crio.sock
                 ;;
             *)
                 echo "Unsupported container runtime: $2"
@@ -285,24 +285,24 @@ apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 bootstrapTokens:
 - groups:
-- system:bootstrappers:kubeadm:default-node-token
-token: $(kubeadm token generate)
-ttl: ${TOKEN_TLL}
-usages:
-- signing
-- authentication
+  - system:bootstrappers:kubeadm:default-node-token
+  token: $(kubeadm token generate)
+  ttl: ${TOKEN_TLL}
+  usages:
+    - signing
+    - authentication
 localAPIEndpoint:
-advertiseAddress: ${APISERVER_ADVERTISE_ADDRESS}
-bindPort: ${APISERVER_ADVERTISE_PORT}
+  advertiseAddress: ${APISERVER_ADVERTISE_ADDRESS}
+  bindPort: ${APISERVER_ADVERTISE_PORT}
 nodeRegistration:
-criSocket: unix://${CONTAINER_CTL}
-name: ${NODENAME}
-taints:
-- effect: NoSchedule
+  criSocket: ${CONTAINER_CTL}
+  name: ${NODENAME}
+  taints:
+  - effect: NoSchedule
     key: node-role.kubernetes.io/master
-- effect: NoSchedule
+  - effect: NoSchedule
     key: node-role.kubernetes.io/control-plane
-kubeletExtraArgs:
+  kubeletExtraArgs:
     cloud-provider: external
     container-runtime: ${CONTAINER_RUNTIME}
     container-runtime-endpoint: ${CONTAINER_CTL}
@@ -310,20 +310,20 @@ kubeletExtraArgs:
 kind: KubeletConfiguration
 apiVersion: kubelet.config.k8s.io/v1beta1
 authentication:
-anonymous:
+  anonymous:
     enabled: false
-webhook:
+  webhook:
     cacheTTL: 0s
     enabled: true
-x509:
+  x509:
     clientCAFile: /etc/kubernetes/pki/ca.crt
 authorization:
-mode: Webhook
-webhook:
+  mode: Webhook
+  webhook:
     cacheAuthorizedTTL: 0s
     cacheUnauthorizedTTL: 0s
 clusterDNS:
-- ${CLUSTER_DNS}
+  - ${CLUSTER_DNS}
 cgroupDriver: systemd
 failSwapOn: false
 hairpinMode: hairpin-veth
@@ -350,29 +350,29 @@ apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 certificatesDir: /etc/kubernetes/pki
 clusterName: ${NODEGROUP_NAME}
-imageRepository: k8s.gcr.io
+imageRepository: registry.k8s.io
 kubernetesVersion: ${KUBERNETES_VERSION}
 networking:
-dnsDomain: cluster.local
-serviceSubnet: ${SERVICE_NETWORK_CIDR}
-podSubnet: ${POD_NETWORK_CIDR}
+  dnsDomain: cluster.local
+  serviceSubnet: ${SERVICE_NETWORK_CIDR}
+  podSubnet: ${POD_NETWORK_CIDR}
 scheduler: {}
 controllerManager:
-extraArgs:
+  extraArgs:
     cloud-provider: external
 controlPlaneEndpoint: ${CONTROL_PLANE_ENDPOINT_HOST}:${APISERVER_ADVERTISE_PORT}
-dns:
-imageRepository: k8s.gcr.io/coredns
-imageTag: v1.9.3
+#dns:
+#  imageRepository: registry.k8s.io/coredns
+#  imageTag: v1.9.3
 apiServer:
-extraArgs:
+  extraArgs:
     cloud-provider: external
     authorization-mode: Node,RBAC
-timeoutForControlPlane: 4m0s
-certSANs:
-- ${LOAD_BALANCER_IP}
-- ${CONTROL_PLANE_ENDPOINT_HOST}
-- ${CONTROL_PLANE_ENDPOINT_HOST%%.*}
+  timeoutForControlPlane: 4m0s
+  certSANs:
+  - ${LOAD_BALANCER_IP}
+  - ${CONTROL_PLANE_ENDPOINT_HOST}
+  - ${CONTROL_PLANE_ENDPOINT_HOST%%.*}
 EOF
 
     for CERT_EXTRA in ${CERT_EXTRA_SANS[*]} 
@@ -392,7 +392,7 @@ EOF
     if [ "$EXTERNAL_ETCD" = "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
         cat >> ${KUBEADM_CONFIG} <<EOF
 etcd:
-external:
+  external:
     caFile: /etc/etcd/ssl/ca.pem
     certFile: /etc/etcd/ssl/etcd.pem
     keyFile: /etc/etcd/ssl/etcd-key.pem
@@ -404,6 +404,11 @@ EOF
             echo "    - ${ENDPOINT}" >> ${KUBEADM_CONFIG}
         done
     fi
+
+	# If version 27 or greater, remove this kuletet argument
+	if [ $MAJOR -ge 27 ]; then
+		sed -i '/container-runtime:/d' ${KUBEADM_CONFIG}
+	fi
 
     echo "Init K8 cluster with options:$K8_OPTIONS"
 
@@ -453,7 +458,7 @@ EOF
 
         echo "Install flannel network"
 
-        kubectl apply -f "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml" 2>&1
+        kubectl apply -f "https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml" 2>&1
 
     elif [ "$CNI_PLUGIN" = "weave" ]; then
 
