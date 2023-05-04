@@ -21,7 +21,7 @@ export USE_VANILLA_GRPC_ARGS=--no-use-vanilla-grpc
 
 if [ "${GRPC_PROVIDER}" = "externalgrpc" ]; then
     USE_VANILLA_GRPC_ARGS=--use-vanilla-grpc
-    AUTOSCALER_REGISTRY=k8s.gcr.io/autoscaling
+    AUTOSCALER_REGISTRY=registry.k8s.io/autoscaling
     CLOUDPROVIDER_CONFIG=/etc/cluster/grpc-config.yaml
 fi
 

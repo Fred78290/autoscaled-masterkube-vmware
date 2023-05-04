@@ -350,7 +350,7 @@ apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 certificatesDir: /etc/kubernetes/pki
 clusterName: ${NODEGROUP_NAME}
-imageRepository: k8s.gcr.io
+imageRepository: registry.k8s.io
 kubernetesVersion: ${KUBERNETES_VERSION}
 networking:
   dnsDomain: cluster.local
