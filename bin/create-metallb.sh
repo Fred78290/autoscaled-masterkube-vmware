@@ -15,7 +15,7 @@ sed "s/__METALLB_IP_RANGE__/$METALLB_IP_RANGE/g" $KUBERNETES_TEMPLATE/config.yam
 
 #kubectl --kubeconfig=${TARGET_CLUSTER_LOCATION}/config apply -f $KUBERNETES_TEMPLATE/namespace.yaml
 kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f $ETC_DIR/metallb.yaml
-kubectl create secret generic -n metallb-system memberlist --dry-run=client -o json \
+kubectl create secret generic -n metallb-system memberlist --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 	--from-literal=secretkey="$(openssl rand -base64 128)" | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 

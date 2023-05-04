@@ -29,7 +29,7 @@ deploy namespace
 deploy serviceaccount
 deploy service
 
-kubectl create secret generic kubernetes-dashboard-certs -n $K8NAMESPACE --dry-run=client -o json \
+kubectl create secret generic kubernetes-dashboard-certs -n $K8NAMESPACE --dry-run=client -o yaml \
     --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
     --from-file=dashboard.key=${SSL_LOCATION}/privkey.pem \
     --from-file=dashboard.crt=${SSL_LOCATION}/fullchain.pem | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
@@ -49,11 +49,11 @@ deploy scraper
 
 # Create the service account in the current namespace 
 # (we assume default)
-kubectl create serviceaccount my-dashboard-sa -n $K8NAMESPACE --dry-run=client -o json \
+kubectl create serviceaccount my-dashboard-sa -n $K8NAMESPACE --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 # Give that service account root on the cluster
 kubectl create clusterrolebinding my-dashboard-sa --clusterrole=cluster-admin --serviceaccount=$K8NAMESPACE:my-dashboard-sa \
-	--dry-run=client -o json \
+	--dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 # Find the secret that was created to hold the token for the SA
 kubectl get secrets -n $K8NAMESPACE --kubeconfig=${TARGET_CLUSTER_LOCATION}/config

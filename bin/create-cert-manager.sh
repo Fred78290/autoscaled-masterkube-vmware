@@ -56,7 +56,7 @@ esac
 
 mkdir -p $ETC_DIR
 
-kubectl create namespace $K8NAMESPACE --dry-run=client -o json \
+kubectl create namespace $K8NAMESPACE --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 helm repo add jetstack https://charts.jetstack.io
@@ -71,7 +71,7 @@ helm upgrade -i $K8NAMESPACE jetstack/cert-manager \
 
 if [ -z "${PUBLIC_DOMAIN_NAME}" ]; then
     echo_blue_bold "Register CA self signed issuer"
-    kubectl create secret generic ca-key-pair --dry-run=client -n $K8NAMESPACE -o json \
+    kubectl create secret generic ca-key-pair -n $K8NAMESPACE --dry-run=client -o yaml \
         --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
         --from-file=tls.crt=${SSL_LOCATION}/ca.pem \
         --from-file=tls.key=${SSL_LOCATION}/ca.key | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
@@ -79,14 +79,14 @@ if [ -z "${PUBLIC_DOMAIN_NAME}" ]; then
     deploy cluster-issuer-selfsigned
 else
     if [ "${USE_ZEROSSL}" = "YES" ]; then
-        kubectl create secret generic zero-ssl-eabsecret -n $K8NAMESPACE --dry-run=client -o json \
+        kubectl create secret generic zero-ssl-eabsecret -n $K8NAMESPACE --dry-run=client -o yaml \
 			--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 			--from-literal secret="${ZEROSSL_EAB_HMAC_SECRET}" | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
     fi
 
     if [ -n "${AWS_ROUTE53_PUBLIC_ZONE_ID}" ]; then
         echo_blue_bold "Register route53 issuer"
-        kubectl create secret generic route53-credentials-secret -n $K8NAMESPACE --dry-run=client -o json \
+        kubectl create secret generic route53-credentials-secret -n $K8NAMESPACE --dry-run=client -o yaml \
 			--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 			--from-literal=secret=${AWS_ROUTE53_SECRETKEY} | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
@@ -99,7 +99,7 @@ else
             --set dnsPolicy=ClusterFirst \
             --namespace cert-manager
 
-        kubectl create secret generic godaddy-api-key-prod -n $K8NAMESPACE --dry-run=client -o json \
+        kubectl create secret generic godaddy-api-key-prod -n $K8NAMESPACE --dry-run=client -o yaml \
             --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
             --from-literal=key=${GODADDY_API_KEY} \
             --from-literal=secret=${GODADDY_API_SECRET} | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -

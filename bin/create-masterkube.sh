@@ -790,9 +790,9 @@ if [ "${CREATE_IMAGE_ONLY}" = "YES" ]; then
 fi
 
 if [ ${GRPC_PROVIDER} = "grpc" ]; then
-    export CLOUDPROVIDER_CONFIG=${TARGET_CONFIG_LOCATION}/grpc-config.json
+    export CLOUDPROVIDER_CONFIG=grpc-config.json
 else
-    export CLOUDPROVIDER_CONFIG=${TARGET_CONFIG_LOCATION}/grpc-config.yaml
+    export CLOUDPROVIDER_CONFIG=grpc-config.yaml
 fi
 
 # For vmware autoscaler
@@ -1398,7 +1398,7 @@ MASTER_IP=$(cat ${TARGET_CLUSTER_LOCATION}/manager-ip)
 TOKEN=$(cat ${TARGET_CLUSTER_LOCATION}/token)
 CACERT=$(cat ${TARGET_CLUSTER_LOCATION}/ca.cert)
 
-kubectl create secret generic autoscaler-ssh-keys --dry-run=client -n kube-system -o yaml \
+kubectl create secret generic autoscaler-ssh-keys -n kube-system --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 	--from-file=id_rsa="${SSH_PRIVATE_KEY}" \
 	--from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
@@ -1406,7 +1406,7 @@ kubectl create secret generic autoscaler-ssh-keys --dry-run=client -n kube-syste
 echo_title "Write vsphere autoscaler provider config"
 
 if [ ${GRPC_PROVIDER} = "grpc" ]; then
-    cat > ${CLOUDPROVIDER_CONFIG} <<EOF
+    cat > ${TARGET_CONFIG_LOCATION}/${CLOUDPROVIDER_CONFIG} <<EOF
     {
         "address": "$CONNECTTO",
         "secret": "vmware",
@@ -1414,7 +1414,7 @@ if [ ${GRPC_PROVIDER} = "grpc" ]; then
     }
 EOF
 else
-    echo "address: $CONNECTTO" > ${CLOUDPROVIDER_CONFIG}
+    echo "address: $CONNECTTO" > ${TARGET_CONFIG_LOCATION}/${CLOUDPROVIDER_CONFIG}
 fi
 
 if [ "${GOVC_INSECURE}" == "1" ]; then

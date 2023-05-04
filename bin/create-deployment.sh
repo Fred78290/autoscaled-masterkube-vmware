@@ -1,19 +1,20 @@
 # Recopy config file on master node
-kubectl create configmap config-cluster-autoscaler --dry-run=client -n kube-system -o yaml \
+kubectl create configmap config-cluster-autoscaler -n kube-system --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
-	--from-file ${CLOUDPROVIDER_CONFIG} \
+	--from-file ${TARGET_CONFIG_LOCATION}/${CLOUDPROVIDER_CONFIG} \
 	--from-file ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
-kubectl create configmap kubernetes-pki --dry-run=client -n kube-system -o yaml \
+kubectl create configmap kubernetes-pki -n kube-system --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 	--from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 if [ "${EXTERNAL_ETCD}" = "true" ]; then
-    kubectl create secret generic etcd-ssl --dry-run=client -n kube-system -o yaml \
+    kubectl create secret generic etcd-ssl -n kube-system --dry-run=client -o yaml \
 		--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
         --from-file ${TARGET_CLUSTER_LOCATION}/etcd/ssl | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 else
-    kubectl create secret generic etcd-ssl --dry-run=client --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -n kube-system -o yaml \
+    kubectl create secret generic etcd-ssl -n kube-system --dry-run=client -o yaml \
+		--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
         --from-file ${TARGET_CLUSTER_LOCATION}/kubernetes/pki/etcd | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 fi
 
@@ -61,14 +62,14 @@ sudo bash -c "echo '${NGINX_IP} masterkube-vmware.${DOMAIN_NAME} ${DASHBOARD_HOS
 echo_title "Save templates into cluster"
 
 # Save template
-kubectl create ns ${NODEGROUP_NAME} --dry-run=client --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o yaml | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
+kubectl create ns ${NODEGROUP_NAME} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config --dry-run=client -o yaml | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 # Add cluster config in configmap
-kubectl create configmap cluster --dry-run=client -n ${NODEGROUP_NAME} -o yaml \
+kubectl create configmap cluster -n ${NODEGROUP_NAME} --dry-run=client -o yaml \
     --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 	--from-file ${TARGET_CLUSTER_LOCATION}/ | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
-kubectl create configmap config --dry-run=client -n ${NODEGROUP_NAME} -o yaml \
+kubectl create configmap config -n ${NODEGROUP_NAME} --dry-run=client -o yaml \
     --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 	--from-file ${TARGET_CONFIG_LOCATION} | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
@@ -76,7 +77,7 @@ kubectl create configmap config --dry-run=client -n ${NODEGROUP_NAME} -o yaml \
 pushd ${TARGET_DEPLOY_LOCATION} &>/dev/null
 	for DIR in $(ls -1 -d */ | tr -d '/')
 	do
-		kubectl create configmap ${DIR} --dry-run=client -n ${NODEGROUP_NAME} -o yaml \
+		kubectl create configmap ${DIR} -n ${NODEGROUP_NAME} --dry-run=client -o yaml \
 			--kubeconfig=${TARGET_CLUSTER_LOCATION}/config --from-file ${DIR} | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 	done
 popd &>/dev/null

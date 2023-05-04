@@ -9,7 +9,7 @@ pushd ${TARGET_DEPLOY_LOCATION} &>/dev/null
 
 export K8NAMESPACE=cattle-system
 
-kubectl create ns ${K8NAMESPACE} --dry-run=client --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
+kubectl create ns ${K8NAMESPACE} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config --dry-run=client -o yaml | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 if [ ${KUBERNETES_MINOR_RELEASE} -lt 26 ]; then
     REPO=rancher-latest/rancher
