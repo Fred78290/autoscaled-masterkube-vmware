@@ -458,7 +458,7 @@ EOF
 
         echo "Install flannel network"
 
-        kubectl apply -f "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml" 2>&1
+        kubectl apply -f "https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml" 2>&1
 
     elif [ "$CNI_PLUGIN" = "weave" ]; then
 

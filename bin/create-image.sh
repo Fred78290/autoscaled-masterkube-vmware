@@ -594,7 +594,7 @@ SHELL
         mv calicoctl-linux-${SEED_ARCH} /usr/local/bin/calicoctl
         pull_image https://docs.projectcalico.org/manifests/calico-vxlan.yaml
     elif [ "$CNI_PLUGIN" = "flannel" ]; then
-        pull_image https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+        pull_image https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
     elif [ "$CNI_PLUGIN" = "weave" ]; then
         pull_image "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
     elif [ "$CNI_PLUGIN" = "canal" ]; then
