@@ -361,9 +361,9 @@ controllerManager:
   extraArgs:
     cloud-provider: external
 controlPlaneEndpoint: ${CONTROL_PLANE_ENDPOINT_HOST}:${APISERVER_ADVERTISE_PORT}
-dns:
-  imageRepository: k8s.gcr.io/coredns
-  imageTag: v1.9.3
+#dns:
+#  imageRepository: registry.k8s.io/coredns
+#  imageTag: v1.9.3
 apiServer:
   extraArgs:
     cloud-provider: external
