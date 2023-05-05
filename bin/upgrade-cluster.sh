@@ -204,7 +204,7 @@ else
 
 	# Update tools
 	echo_title "Update kubernetes binaries"
-	ADDRESSES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[].status.addresses[]|select(.type == "ExternalIP")|.address')
+	ADDRESSES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[].status.addresses[]|select(.type == "InternalIP")|.address')
 	for ADDR in ${ADDRESSES}
 	do
 		ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${ADDR} <<EOF
@@ -217,7 +217,7 @@ EOF
 
 	# Upgrade control plane
 	echo_title "Update control plane nodes"
-	ADDRESSES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[]|select(.metadata.labels.master == "true")|.status.addresses[]|select(.type == "ExternalIP")|.address')
+	ADDRESSES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[]|select(.metadata.labels.master == "true")|.status.addresses[]|select(.type == "InternalIP")|.address')
 	for ADDR in ${ADDRESSES}
 	do
 		echo_blue_bold "Update node: ${ADDR}"
@@ -232,7 +232,7 @@ EOF
 
 	# Upgrade worker
 	echo_title "Update worker nodes"
-	ADDRESSES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[]|select(.metadata.labels.worker == "true")|.status.addresses[]|select(.type == "ExternalIP")|.address')
+	ADDRESSES=$(kubectl get no --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.items[]|select(.metadata.labels.worker == "true")|.status.addresses[]|select(.type == "InternalIP")|.address')
 	for ADDR in ${ADDRESSES}
 	do
 		echo_blue_bold "Update node: ${ADDR}"
@@ -250,7 +250,7 @@ EOF
 	do
 		NODE=$(echo ${NODES} | jq ".items[$((INDEX-1))]")
 		NODENAME=$(echo ${NODE} | jq -r .metadata.name)
-		ADDR=$(echo ${NODE} | jq -r '.status.addresses[]|select(.type == "ExternalIP")|.address')
+		ADDR=$(echo ${NODE} | jq -r '.status.addresses[]|select(.type == "InternalIP")|.address')
 
 		echo_blue_bold "Update kubelet for node: ${NODENAME}"
 
