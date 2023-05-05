@@ -338,7 +338,18 @@ mkdir -p ${CREDENTIALS_BIN}
 
 if [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
 
-    curl -sL https://github.com/Fred78290/aws-ecr-credential-provider/releases/download/v1.0.0/ecr-credential-provider-${SEED_ARCH} -o ${CREDENTIALS_BIN}/ecr-credential-provider
+	if [ ${KUBERNETES_MINOR_RELEASE} -gt 26 ]; then
+		ECR_CREDS_VERSION=v1.27.1
+		KUBELET_CREDS_VERSION=v1
+	elif [ ${KUBERNETES_MINOR_RELEASE} -gt 25 ]; then
+		ECR_CREDS_VERSION=v1.26.1
+		KUBELET_CREDS_VERSION=v1alpha1
+	else
+		ECR_CREDS_VERSION=v1.0.0
+		KUBELET_CREDS_VERSION=v1alpha1
+	fi
+	
+	curl -sL https://github.com/Fred78290/aws-ecr-credential-provider/releases/download/${ECR_CREDS_VERSION}/ecr-credential-provider-${SEED_ARCH} -o ${CREDENTIALS_BIN}/ecr-credential-provider
     chmod +x ${CREDENTIALS_BIN}/ecr-credential-provider
 
     mkdir -p /root/.aws
@@ -357,7 +368,7 @@ aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
 SHELL
 
     cat > ${CREDENTIALS_CONFIG} <<SHELL
-apiVersion: kubelet.config.k8s.io/v1alpha1
+apiVersion: kubelet.config.k8s.io/${KUBELET_CREDS_VERSION}
 kind: CredentialProviderConfig
 providers:
   - name: ecr-credential-provider
@@ -368,7 +379,7 @@ providers:
       - "*.dkr.ecr.us-iso-east-1.c2s.ic.gov"
       - "*.dkr.ecr.us-isob-east-1.sc2s.sgov.gov"
     defaultCacheDuration: "12h"
-    apiVersion: credentialprovider.kubelet.k8s.io/v1alpha1
+    apiVersion: credentialprovider.kubelet.k8s.io/${KUBELET_CREDS_VERSION}
     args:
       - get-credentials
     env:
