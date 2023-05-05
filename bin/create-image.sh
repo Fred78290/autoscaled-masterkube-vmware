@@ -15,7 +15,7 @@
 CURDIR=$(dirname $0)
 DISTRO=jammy
 KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
-CNI_PLUGIN_VERSION=v1.1.1
+CNI_PLUGIN_VERSION=v1.2.0
 SSH_KEY=$(cat ~/.ssh/id_rsa.pub)
 CACHE=~/.local/vmware/cache
 TARGET_IMAGE=${DISTRO}-kubernetes-$KUBERNETES_VERSION

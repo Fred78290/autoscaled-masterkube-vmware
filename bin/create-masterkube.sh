@@ -29,7 +29,7 @@ export SEED_USER=ubuntu
 export SEED_IMAGE="${DISTRO}-server-cloudimg-seed"
 export ROOT_IMG_NAME=${DISTRO}-kubernetes
 export CNI_PLUGIN=flannel
-export CNI_VERSION="v1.1.1"
+export CNI_PLUGIN_VERSION="v1.2.0"
 export USE_ZEROSSL=YES
 export USE_KEEPALIVED=NO
 export HA_CLUSTER=false
@@ -224,7 +224,7 @@ Options are:
 --transport | -t=<value>                       # Override the transport to be used between autoscaler and vmware-autoscaler, default $TRANSPORT
 --node-group=<value>                           # Override the node group name, default $NODEGROUP_NAME
 --cni-plugin=<value>                           # Override CNI plugin, default: ${CNI_PLUGIN}
---cni-version | -n=<value>                     # Override CNI plugin version, default: $CNI_VERSION
+--cni-version | -n=<value>                     # Override CNI plugin version, default: $CNI_PLUGIN_VERSION
 --kubernetes-version | -k=<value>              # Override the kubernetes version, default $KUBERNETES_VERSION
 
 ### Flags in ha mode only
@@ -547,7 +547,7 @@ while true; do
         shift 2
         ;;
     -n | --cni-version)
-        CNI_VERSION="$2"
+        CNI_PLUGIN_VERSION="$2"
         shift 2
         ;;
     -p | --password)
@@ -773,7 +773,7 @@ if [ -z "$(govc vm.info ${TARGET_IMAGE} 2>&1)" ]; then
         --aws-secret-key=${AWS_SECRETKEY} \
         --password="${KUBERNETES_PASSWORD}" \
         --distribution="${DISTRO}" \
-        --cni-version="${CNI_VERSION}" \
+        --cni-version="${CNI_PLUGIN_VERSION}" \
         --custom-image="${TARGET_IMAGE}" \
         --kubernetes-version="${KUBERNETES_VERSION}" \
         --container-runtime=${CONTAINER_ENGINE} \
@@ -830,7 +830,7 @@ export AWS_ROUTE53_PUBLIC_ZONE_ID=${AWS_ROUTE53_PUBLIC_ZONE_ID}
 export AWS_ROUTE53_SECRETKEY=${AWS_ROUTE53_SECRETKEY}
 export CLOUDPROVIDER_CONFIG=${CLOUDPROVIDER_CONFIG}
 export CNI_PLUGIN=$CNI_PLUGIN
-export CNI_VERSION=$CNI_VERSION
+export CNI_PLUGIN_VERSION=$CNI_PLUGIN_VERSION
 export CONTROLNODES=$CONTROLNODES
 export CORESTOTAL="$CORESTOTAL"
 export DEFAULT_MACHINE=$DEFAULT_MACHINE
