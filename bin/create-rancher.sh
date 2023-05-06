@@ -53,7 +53,7 @@ COUNT=0
 
 while [ -z ${BOOTSTRAP_SECRET} ] && [ $COUNT -lt 120 ];
 do
-    BOOTSTRAP_SECRET=$(kubectl get secret --namespace ${K8NAMESPACE} bootstrap-secret -o go-template='{{.data.bootstrapPassword|base64decode}}' 2>/dev/null)
+    BOOTSTRAP_SECRET=$(kubectl get secret --namespace ${K8NAMESPACE} bootstrap-secret -o go-template='{{.data.bootstrapPassword|base64decode}}' --kubeconfig=${TARGET_CLUSTER_LOCATION}/config 2>/dev/null)
     sleep 1
     echo_blue_dot
 	COUNT=$((COUNT+1))

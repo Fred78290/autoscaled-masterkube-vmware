@@ -94,6 +94,7 @@ else
     elif [ -n ${GODADDY_API_KEY} ]; then
         echo_blue_bold "Register godaddy issuer"
         helm upgrade -i godaddy-webhook godaddy-webhook/godaddy-webhook \
+	        --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
             --version ${GODADDY_WEBHOOK_VERSION} \
             --set groupName=${PUBLIC_DOMAIN_NAME} \
             --set dnsPolicy=ClusterFirst \
