@@ -27,13 +27,13 @@ fi
 cat > ${TARGET_DEPLOY_LOCATION}/rancher/rancher.yaml <<EOF
 hostname: rancher-vmware.$DOMAIN_NAME
 ingress:
-    ingressClassName: nginx
-    extraAnnotations:
-        "cert-manager.io/cluster-issuer": cert-issuer-prod
-        "external-dns.alpha.kubernetes.io/register": 'true'
-    tls:
-        source: secret
-        secretName: tls-rancher-ingress
+  ingressClassName: nginx
+  extraAnnotations:
+    "cert-manager.io/cluster-issuer": cert-issuer-prod
+    "external-dns.alpha.kubernetes.io/register": 'true'
+  tls:
+    source: secret
+    secretName: tls-rancher-ingress
 tls: ingress
 replicas: 1
 global:

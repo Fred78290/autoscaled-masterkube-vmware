@@ -44,7 +44,7 @@ eval set -- "$TEMP"
 
 # extract options and their arguments into variables.
 while true ; do
-	#echo "1:$1"
+    #echo "1:$1"
     case "$1" in
         -d|--distribution)
             DISTRO="$2"
@@ -219,14 +219,14 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         echo_blue_bold "Wait ${SEEDIMAGE} to shutdown"
         while [ $(govc vm.info -json "${SEEDIMAGE}" | jq .VirtualMachines[0].Runtime.PowerState | tr -d '"') == "poweredOn" ]
         do
-            echo -n "."
+            echo_blue_dot
             sleep 1
         done
         echo
 
         echo_blue_bold "${SEEDIMAGE} is ready"
     else
-        echo_blue_bold "Import failed!"
+        echo_red_bold "Import failed!"
         exit -1
     fi 
 else
@@ -338,30 +338,30 @@ mkdir -p ${CREDENTIALS_BIN}
 
 if [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
 
-	if [ ${KUBERNETES_MINOR_RELEASE} -gt 26 ]; then
-		ECR_CREDS_VERSION=v1.27.1
-		KUBELET_CREDS_VERSION=v1
-	elif [ ${KUBERNETES_MINOR_RELEASE} -gt 25 ]; then
-		ECR_CREDS_VERSION=v1.26.1
-		KUBELET_CREDS_VERSION=v1alpha1
-	else
-		ECR_CREDS_VERSION=v1.0.0
-		KUBELET_CREDS_VERSION=v1alpha1
-	fi
-	
-	curl -sL https://github.com/Fred78290/aws-ecr-credential-provider/releases/download/${ECR_CREDS_VERSION}/ecr-credential-provider-${SEED_ARCH} -o ${CREDENTIALS_BIN}/ecr-credential-provider
+    if [ ${KUBERNETES_MINOR_RELEASE} -gt 26 ]; then
+        ECR_CREDS_VERSION=v1.27.1
+        KUBELET_CREDS_VERSION=v1
+    elif [ ${KUBERNETES_MINOR_RELEASE} -gt 25 ]; then
+        ECR_CREDS_VERSION=v1.26.1
+        KUBELET_CREDS_VERSION=v1alpha1
+    else
+        ECR_CREDS_VERSION=v1.0.0
+        KUBELET_CREDS_VERSION=v1alpha1
+    fi
+    
+    curl -sL https://github.com/Fred78290/aws-ecr-credential-provider/releases/download/${ECR_CREDS_VERSION}/ecr-credential-provider-${SEED_ARCH} -o ${CREDENTIALS_BIN}/ecr-credential-provider
     chmod +x ${CREDENTIALS_BIN}/ecr-credential-provider
 
     mkdir -p /root/.aws
 
-    cat > /root/.aws/config  <<SHELL
+    cat > /root/.aws/config <<SHELL
 [default]
 output = json
 region = us-east-1
 cli_binary_format=raw-in-base64-out
 SHELL
 
-    cat > /root/.aws/credentials  <<SHELL
+    cat > /root/.aws/credentials <<SHELL
 [default]
 aws_access_key_id = ${AWS_ACCESS_KEY_ID}
 aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
@@ -487,7 +487,7 @@ SHELL
         echo "Install Containerd"
         echo "==============================================================================================================================="
 
-        curl -sL  https://github.com/containerd/containerd/releases/download/v1.7.0/cri-containerd-cni-1.7.0-linux-${SEED_ARCH}.tar.gz | tar -C / -xz
+        curl -sL https://github.com/containerd/containerd/releases/download/v1.7.0/cri-containerd-cni-1.7.0-linux-${SEED_ARCH}.tar.gz | tar -C / -xz
 
         mkdir -p /etc/containerd
         containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/g' | tee /etc/containerd/config.toml
@@ -495,7 +495,7 @@ SHELL
         systemctl enable containerd.service
         systemctl restart containerd
 
-        curl -sL  https://github.com/containerd/nerdctl/releases/download/v1.3.1/nerdctl-1.3.1-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
+        curl -sL https://github.com/containerd/nerdctl/releases/download/v1.3.1/nerdctl-1.3.1-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
     else
 
         echo "==============================================================================================================================="
@@ -519,14 +519,14 @@ SHELL
     echo "==============================================================================================================================="
     echo "= Install crictl"
     echo "==============================================================================================================================="
-    curl -sL https://github.com/kubernetes-sigs/cri-tools/releases/download/v${CRIO_VERSION}.0/crictl-v${CRIO_VERSION}.0-linux-${SEED_ARCH}.tar.gz  | tar -C /usr/local/bin -xz
+    curl -sL https://github.com/kubernetes-sigs/cri-tools/releases/download/v${CRIO_VERSION}.0/crictl-v${CRIO_VERSION}.0-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
     chmod +x /usr/local/bin/crictl
 
     echo "==============================================================================================================================="
     echo "= Clean ubuntu distro"
     echo "==============================================================================================================================="
     apt-get autoremove -y
-	apt-get autoclean -y
+    apt-get autoclean -y
     echo
 
     echo "==============================================================================================================================="

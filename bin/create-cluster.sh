@@ -33,7 +33,7 @@ CSI_ZONE=office
 USE_K3S=false
 ETCD_ENDPOINT=
 
-if [ "$(uname -p)" == "aarch64" ];  then
+if [ "$(uname -p)" == "aarch64" ]; then
 	ARCH="arm64"
 else
 	ARCH="amd64"

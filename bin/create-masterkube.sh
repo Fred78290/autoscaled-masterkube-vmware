@@ -18,12 +18,12 @@ export SCHEME="vmware"
 export NODEGROUP_NAME="vmware-ca-k8s"
 export MASTERKUBE="${NODEGROUP_NAME}-masterkube"
 export DASHBOARD_HOSTNAME=masterkube-vmware-dashboard
-export SSH_PRIVATE_KEY="$HOME/.ssh/id_rsa"
+export SSH_PRIVATE_KEY="${HOME}/.ssh/id_rsa"
 export SSH_PUBLIC_KEY="${SSH_PRIVATE_KEY}.pub"
 export KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
 export KUBERNETES_USER=kubernetes
 export KUBERNETES_PASSWORD=
-export KUBECONFIG=$HOME/.kube/config
+export KUBECONFIG=${HOME}/.kube/config
 export SEED_ARCH=amd64
 export SEED_USER=ubuntu
 export SEED_IMAGE="${DISTRO}-server-cloudimg-seed"
@@ -39,7 +39,7 @@ export CONTROLNODES=1
 export WORKERNODES=0
 export MINNODES=0
 export MAXNODES=9
-export MAXTOTALNODES=$MAXNODES
+export MAXTOTALNODES=${MAXNODES}
 export GRPC_PROVIDER=externalgrpc
 export CORESTOTAL="0:16"
 export MEMORYTOTAL="0:48"
@@ -113,11 +113,9 @@ export GOVC_ZONE=office
 # Sample machine definition
 MACHINE_DEFS=$(cat ${PWD}/templates/machines.json)
 
-SSH_OPTIONS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
-SCP_OPTIONS="${SSH_OPTIONS} -p -r"
 DELETE_CLUSTER=NO
 
-source $PWD/bin/common.sh
+source ${PWD}/bin/common.sh
 
 # import govc hidden definitions
 if [ -f ${GOVCDEFS} ]; then
@@ -127,10 +125,10 @@ fi
 function nextip()
 {
     IP=$1
-    IP_HEX=$(printf '%.2X%.2X%.2X%.2X\n' `echo $IP | tr '.' ' '`)
-    NEXT_IP_HEX=$(printf %.8X `echo $(( 0x$IP_HEX + 1 ))`)
-    NEXT_IP=$(printf '%d.%d.%d.%d\n' `echo $NEXT_IP_HEX | sed -r 's/(..)/0x\1\ /g'`)
-    echo "$NEXT_IP"
+    IP_HEX=$(printf '%.2X%.2X%.2X%.2X\n' `echo ${IP} | tr '.' ' '`)
+    NEXT_IP_HEX=$(printf %.8X `echo $(( 0x${IP_HEX} + 1 ))`)
+    NEXT_IP=$(printf '%d.%d.%d.%d\n' `echo ${NEXT_IP_HEX} | sed -r 's/(..)/0x\1\ /g'`)
+    echo "${NEXT_IP}"
 }
 
 function build_routes() {
@@ -143,30 +141,30 @@ function build_routes() {
         local VIA=
         local METRIC=500
 
-        IFS=, read -a DEFS <<< "$ROUTE"
+        IFS=, read -a DEFS <<< "${ROUTE}"
 
         for DEF in ${DEFS[@]}
         do
-            IFS== read KEY VALUE <<< "$DEF"
-            case $KEY in
+            IFS== read KEY VALUE <<< "${DEF}"
+            case ${KEY} in
                 to)
-                    TO=$VALUE
+                    TO=${VALUE}
                     ;;
                 via)
-                    VIA=$VALUE
+                    VIA=${VALUE}
                     ;;
                 metric)
-                    METRIC=$VALUE
+                    METRIC=${VALUE}
                     ;;
             esac
         done
 
-        if [ -n "$TO" ] && [ -n "$VIA" ]; then
-            ROUTES=$(echo $ROUTES | jq --arg TO $TO --arg VIA $VIA --argjson METRIC $METRIC '. += [{ "to": $TO, "via": $VIA, "metric": $METRIC }]')
+        if [ -n "${TO}" ] && [ -n "${VIA}" ]; then
+            ROUTES=$(echo ${ROUTES} | jq --arg TO ${TO} --arg VIA ${VIA} --argjson METRIC ${METRIC} '. += [{ "to": $TO, "via": $VIA, "metric": $METRIC }]')
         fi
     done
 
-    echo -n $ROUTES
+    echo -n ${ROUTES}
 }
 
 function usage() {
@@ -213,73 +211,73 @@ Options are:
 
 --use-k3s                                      # Use k3s in place of kubeadm, default ${USE_K3S}
 --ha-cluster | -c                              # Allow to create an HA cluster, default ${HA_CLUSTER}
---worker-nodes=<value>                         # Specify the number of worker node created in HA cluster, default $WORKERNODES
+--worker-nodes=<value>                         # Specify the number of worker node created in HA cluster, default ${WORKERNODES}
 --container-runtime=<docker|containerd|cri-o>  # Specify which OCI runtime to use, default ${CONTAINER_ENGINE}
 --max-pods                                     # Specify the max pods per created VM, default ${MAX_PODS}
---default-machine | -d=<value>                 # Override machine type used for auto scaling, default $DEFAULT_MACHINE
---nginx-machine                                # Override machine type used for nginx as ELB, default $NGINX_MACHINE
---control-plane-machine                        # Override machine type used for control plane, default $CONTROL_PLANE_MACHINE
---worker-node-machine                          # Override machine type used for worker node, default $WORKER_NODE_MACHINE
---ssh-private-key | -s=<value>                 # Override ssh key is used, default $SSH_PRIVATE_KEY
---transport | -t=<value>                       # Override the transport to be used between autoscaler and vmware-autoscaler, default $TRANSPORT
---node-group=<value>                           # Override the node group name, default $NODEGROUP_NAME
+--default-machine | -d=<value>                 # Override machine type used for auto scaling, default ${DEFAULT_MACHINE}
+--nginx-machine                                # Override machine type used for nginx as ELB, default ${NGINX_MACHINE}
+--control-plane-machine                        # Override machine type used for control plane, default ${CONTROL_PLANE_MACHINE}
+--worker-node-machine                          # Override machine type used for worker node, default ${WORKER_NODE_MACHINE}
+--ssh-private-key | -s=<value>                 # Override ssh key is used, default ${SSH_PRIVATE_KEY}
+--transport | -t=<value>                       # Override the transport to be used between autoscaler and vmware-autoscaler, default ${TRANSPORT}
+--node-group=<value>                           # Override the node group name, default ${NODEGROUP_NAME}
 --cni-plugin=<value>                           # Override CNI plugin, default: ${CNI_PLUGIN}
---cni-version | -n=<value>                     # Override CNI plugin version, default: $CNI_PLUGIN_VERSION
---kubernetes-version | -k=<value>              # Override the kubernetes version, default $KUBERNETES_VERSION
+--cni-version | -n=<value>                     # Override CNI plugin version, default: ${CNI_PLUGIN_VERSION}
+--kubernetes-version | -k=<value>              # Override the kubernetes version, default ${KUBERNETES_VERSION}
 
 ### Flags in ha mode only
 
---create-external-etcd | -e                    # Allow to create an external HA etcd cluster, default $EXTERNAL_ETCD
+--create-external-etcd | -e                    # Allow to create an external HA etcd cluster, default ${EXTERNAL_ETCD}
 --use-keepalived | -u                          # Allow to use keepalived as load balancer else NGINX is used
 
 ### Flags to set the template vm
 
---target-image=<value>                         # Override the prefix template VM image used for created VM, default $ROOT_IMG_NAME
---seed-image=<value>                           # Override the seed image name used to create template, default $SEED_IMAGE
---seed-user=<value>                            # Override the seed user in template, default $SEED_USER
+--target-image=<value>                         # Override the prefix template VM image used for created VM, default ${ROOT_IMG_NAME}
+--seed-image=<value>                           # Override the seed image name used to create template, default ${SEED_IMAGE}
+--seed-user=<value>                            # Override the seed user in template, default ${SEED_USER}
 --password | -p=<value>                        # Override the password to ssh the cluster VM, default random word
 
 ### Flags to configure network in vsphere
 
---public-address=<value>                       # The public address to expose kubernetes endpoint, default $PUBLIC_IP
---no-dhcp-autoscaled-node                      # Autoscaled node don't use DHCP, default $SCALEDNODES_DHCP
---vm-private-network=<value>                   # Override the name of the private network in vsphere, default $VC_NETWORK_PRIVATE
---vm-public-network=<value>                    # Override the name of the public network in vsphere, default $VC_NETWORK_PUBLIC
---net-address=<value>                          # Override the IP of the kubernetes control plane node, default $NET_IP
---net-gateway=<value>                          # Override the IP gateway, default $NET_GATEWAY
---net-dns=<value>                              # Override the IP DNS, default $NET_DNS
---net-domain=<value>                           # Override the domain name, default $NET_DOMAIN
---metallb-ip-range                             # Override the metalb ip range, default $METALLB_IP_RANGE
---dont-use-dhcp-routes-private                 # Tell if we don't use DHCP routes in private network, default $USE_DHCP_ROUTES_PRIVATE
---dont-use-dhcp-routes-public                  # Tell if we don't use DHCP routes in public network, default $USE_DHCP_ROUTES_PUBLIC
+--public-address=<value>                       # The public address to expose kubernetes endpoint, default ${PUBLIC_IP}
+--no-dhcp-autoscaled-node                      # Autoscaled node don't use DHCP, default ${SCALEDNODES_DHCP}
+--vm-private-network=<value>                   # Override the name of the private network in vsphere, default ${VC_NETWORK_PRIVATE}
+--vm-public-network=<value>                    # Override the name of the public network in vsphere, default ${VC_NETWORK_PUBLIC}
+--net-address=<value>                          # Override the IP of the kubernetes control plane node, default ${NET_IP}
+--net-gateway=<value>                          # Override the IP gateway, default ${NET_GATEWAY}
+--net-dns=<value>                              # Override the IP DNS, default ${NET_DNS}
+--net-domain=<value>                           # Override the domain name, default ${NET_DOMAIN}
+--metallb-ip-range                             # Override the metalb ip range, default ${METALLB_IP_RANGE}
+--dont-use-dhcp-routes-private                 # Tell if we don't use DHCP routes in private network, default ${USE_DHCP_ROUTES_PRIVATE}
+--dont-use-dhcp-routes-public                  # Tell if we don't use DHCP routes in public network, default ${USE_DHCP_ROUTES_PUBLIC}
 --add-route-private                            # Add route to private network syntax is --add-route-private=to=X.X.X.X/YY,via=X.X.X.X,metric=100 --add-route-private=to=Y.Y.Y.Y/ZZ,via=X.X.X.X,metric=100, default ${NETWORK_PRIVATE_ROUTES[@]}
 --add-route-public                             # Add route to public network syntax is --add-route-public=to=X.X.X.X/YY,via=X.X.X.X,metric=100 --add-route-public=to=Y.Y.Y.Y/ZZ,via=X.X.X.X,metric=100, default ${NETWORK_PUBLIC_ROUTES[@]}
 
 ### Flags to configure nfs client provisionner
 
---nfs-server-adress                            # The NFS server address, default $NFS_SERVER_ADDRESS
---nfs-server-mount                             # The NFS server mount path, default $NFS_SERVER_PATH
---nfs-storage-class                            # The storage class name to use, default $NFS_STORAGE_CLASS
+--nfs-server-adress                            # The NFS server address, default ${NFS_SERVER_ADDRESS}
+--nfs-server-mount                             # The NFS server mount path, default ${NFS_SERVER_PATH}
+--nfs-storage-class                            # The storage class name to use, default ${NFS_STORAGE_CLASS}
 
 ### Flags for autoscaler
---cloudprovider=<value>                        # autoscaler flag <grpc|externalgrpc>, default: $GRPC_PROVIDER
---max-nodes-total=<value>                      # autoscaler flag, default: $MAXTOTALNODES
---cores-total=<value>                          # autoscaler flag, default: $CORESTOTAL
---memory-total=<value>                         # autoscaler flag, default: $MEMORYTOTAL
---max-autoprovisioned-node-group-count=<value> # autoscaler flag, default: $MAXAUTOPROVISIONNEDNODEGROUPCOUNT
---scale-down-enabled=<value>                   # autoscaler flag, default: $SCALEDOWNENABLED
---scale-down-delay-after-add=<value>           # autoscaler flag, default: $SCALEDOWNDELAYAFTERADD
---scale-down-delay-after-delete=<value>        # autoscaler flag, default: $SCALEDOWNDELAYAFTERDELETE
---scale-down-delay-after-failure=<value>       # autoscaler flag, default: $SCALEDOWNDELAYAFTERFAILURE
---scale-down-unneeded-time=<value>             # autoscaler flag, default: $SCALEDOWNUNEEDEDTIME
---scale-down-unready-time=<value>              # autoscaler flag, default: $SCALEDOWNUNREADYTIME
---unremovable-node-recheck-timeout=<value>     # autoscaler flag, default: $UNREMOVABLENODERECHECKTIMEOUT
+--cloudprovider=<value>                        # autoscaler flag <grpc|externalgrpc>, default: ${GRPC_PROVIDER}
+--max-nodes-total=<value>                      # autoscaler flag, default: ${MAXTOTALNODES}
+--cores-total=<value>                          # autoscaler flag, default: ${CORESTOTAL}
+--memory-total=<value>                         # autoscaler flag, default: ${MEMORYTOTAL}
+--max-autoprovisioned-node-group-count=<value> # autoscaler flag, default: ${MAXAUTOPROVISIONNEDNODEGROUPCOUNT}
+--scale-down-enabled=<value>                   # autoscaler flag, default: ${SCALEDOWNENABLED}
+--scale-down-delay-after-add=<value>           # autoscaler flag, default: ${SCALEDOWNDELAYAFTERADD}
+--scale-down-delay-after-delete=<value>        # autoscaler flag, default: ${SCALEDOWNDELAYAFTERDELETE}
+--scale-down-delay-after-failure=<value>       # autoscaler flag, default: ${SCALEDOWNDELAYAFTERFAILURE}
+--scale-down-unneeded-time=<value>             # autoscaler flag, default: ${SCALEDOWNUNEEDEDTIME}
+--scale-down-unready-time=<value>              # autoscaler flag, default: ${SCALEDOWNUNREADYTIME}
+--unremovable-node-recheck-timeout=<value>     # autoscaler flag, default: ${UNREMOVABLENODERECHECKTIMEOUT}
 EOF
 }
 
 TEMP=$(getopt -o xvheucrk:n:p:s:t: --long upgrade,use-k3s,cloudprovider:,route53-zone-id:,route53-access-key:,route53-secret-key:,use-zerossl,dont-use-zerossl,zerossl-eab-kid:,zerossl-eab-hmac-secret:,godaddy-key:,godaddy-secret:,nfs-server-adress:,nfs-server-mount:,nfs-storage-class:,add-route-private:,add-route-public:,dont-use-dhcp-routes-private,dont-use-dhcp-routes-public,nginx-machine:,control-plane-machine:,worker-node-machine:,delete,configuration-location:,ssl-location:,cert-email:,public-domain:,dashboard-hostname:,create-image-only,no-dhcp-autoscaled-node,metallb-ip-range:,trace,container-runtime:,verbose,help,create-external-etcd,use-keepalived,govc-defs:,worker-nodes:,ha-cluster,public-address:,resume,node-group:,target-image:,seed-image:,seed-user:,vm-public-network:,vm-private-network:,net-address:,net-gateway:,net-dns:,net-domain:,transport:,ssh-private-key:,cni-version:,password:,kubernetes-version:,max-nodes-total:,cores-total:,memory-total:,max-autoprovisioned-node-group-count:,scale-down-enabled:,scale-down-delay-after-add:,scale-down-delay-after-delete:,scale-down-delay-after-failure:,scale-down-unneeded-time:,scale-down-unready-time:,unremovable-node-recheck-timeout: -n "$0" -- "$@")
 
-eval set -- "$TEMP"
+eval set -- "${TEMP}"
 
 # extract options and their arguments into variables.
 while true; do
@@ -294,10 +292,10 @@ while true; do
         ROOT_IMG_NAME=${DISTRO}-kubernetes
         shift 2
         ;;
-	--upgrade)
-		UPGRADE_CLUSTER=YES
-		shift
-		;;
+    --upgrade)
+        UPGRADE_CLUSTER=YES
+        shift
+        ;;
     -v|--verbose)
         SILENT=
         shift 1
@@ -638,18 +636,18 @@ if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externalgrpc" ];
 fi
 
 if [ "${USE_K3S}" == "true" ]; then
-	WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
+    WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
 
     K3S_CHANNEL=$(curl -s https://update.k3s.io/v1-release/channels)
     IFS=. read K8S_VERSION K8S_MAJOR K8S_MINOR <<< "${KUBERNETES_VERSION}"
-    KUBERNETES_VERSION=$(echo -n "$K3S_CHANNEL" | jq -r --arg KUBERNETES_VERSION "${K8S_VERSION}.${K8S_MAJOR}" '.data[]|select(.id == $KUBERNETES_VERSION)|.latest//""')
+    KUBERNETES_VERSION=$(echo -n "${K3S_CHANNEL}" | jq -r --arg KUBERNETES_VERSION "${K8S_VERSION}.${K8S_MAJOR}" '.data[]|select(.id == $KUBERNETES_VERSION)|.latest//""')
 
-	if [ -z "${KUBERNETES_VERSION}" ]; then
-		KUBERNETES_VERSION=$(echo -n "$K3S_CHANNEL" | jq -r '.data[]|select(.id == "latest")|.latest//""')
-		echo_red_bold "k3s ${WANTED_KUBERNETES_VERSION} not available, use latest $KUBERNETES_VERSION"
-	else
-		echo_blue_bold "k3s ${WANTED_KUBERNETES_VERSION} found, use k3s $KUBERNETES_VERSION"
-	fi
+    if [ -z "${KUBERNETES_VERSION}" ]; then
+        KUBERNETES_VERSION=$(echo -n "${K3S_CHANNEL}" | jq -r '.data[]|select(.id == "latest")|.latest//""')
+        echo_red_bold "k3s ${WANTED_KUBERNETES_VERSION} not available, use latest ${KUBERNETES_VERSION}"
+    else
+        echo_blue_bold "k3s ${WANTED_KUBERNETES_VERSION} found, use k3s ${KUBERNETES_VERSION}"
+    fi
 fi
 
 if [ "${USE_K3S}" == "true" ]; then
@@ -658,7 +656,7 @@ else
     TARGET_IMAGE="${ROOT_IMG_NAME}-cni-${CNI_PLUGIN}-${KUBERNETES_VERSION}-${CONTAINER_ENGINE}-${SEED_ARCH}"
 fi
 
-export SSH_KEY_FNAME="$(basename $SSH_PRIVATE_KEY)"
+export SSH_KEY_FNAME="$(basename ${SSH_PRIVATE_KEY})"
 export SSH_PUBLIC_KEY="${SSH_PRIVATE_KEY}.pub"
 
 export TARGET_CONFIG_LOCATION=${CONFIGURATION_LOCATION}/config/${NODEGROUP_NAME}/config
@@ -669,26 +667,26 @@ export TARGET_CLUSTER_LOCATION=${CONFIGURATION_LOCATION}/cluster/${NODEGROUP_NAM
 if [ "${DELETE_CLUSTER}" = "YES" ]; then
     delete-masterkube.sh --configuration-location=${CONFIGURATION_LOCATION} --govc-defs=${GOVCDEFS} --node-group=${NODEGROUP_NAME}
     exit
-elif [ ! -f ${TARGET_CONFIG_LOCATION}/buildenv ] && [ "$RESUME" = "YES" ]; then
+elif [ ! -f ${TARGET_CONFIG_LOCATION}/buildenv ] && [ "${RESUME}" = "YES" ]; then
     echo_red "Unable to resume, building env is not found"
     exit -1
 fi
 
 # Check if ssh private key exists
-if [ ! -f $SSH_PRIVATE_KEY ]; then
-    echo_red "The private ssh key: $SSH_PRIVATE_KEY is not found"
+if [ ! -f ${SSH_PRIVATE_KEY} ]; then
+    echo_red "The private ssh key: ${SSH_PRIVATE_KEY} is not found"
     exit -1
 fi
 
 # Check if ssh public key exists
-if [ ! -f $SSH_PUBLIC_KEY ]; then
-    echo_red "The private ssh key: $SSH_PUBLIC_KEY is not found"
+if [ ! -f ${SSH_PUBLIC_KEY} ]; then
+    echo_red "The private ssh key: ${SSH_PUBLIC_KEY} is not found"
     exit -1
 fi
 
 # Check variables coherence
-if [ "$HA_CLUSTER" = "true" ]; then
-    if [ $USE_KEEPALIVED = "YES" ]; then
+if [ "${HA_CLUSTER}" = "true" ]; then
+    if [ ${USE_KEEPALIVED} = "YES" ]; then
         FIRSTNODE=1
     fi
 else
@@ -698,20 +696,20 @@ else
 fi
 
 # Check if passord is defined
-if [ -z $KUBERNETES_PASSWORD ]; then
+if [ -z ${KUBERNETES_PASSWORD} ]; then
     if [ -f ~/.kubernetes_pwd ]; then
         KUBERNETES_PASSWORD=$(cat ~/.kubernetes_pwd)
     else
         KUBERNETES_PASSWORD=$(uuidgen)
-        echo $n "$KUBERNETES_PASSWORD" > ~/.kubernetes_pwd
+        echo -n "${KUBERNETES_PASSWORD}" > ~/.kubernetes_pwd
     fi
 fi
 
 export SSH_KEY="$(cat ${SSH_PUBLIC_KEY})"
 
 # GRPC network endpoint
-if [ "$LAUNCH_CA" != "YES" ]; then
-    SSH_PRIVATE_KEY_LOCAL="$SSH_PRIVATE_KEY"
+if [ "${LAUNCH_CA}" != "YES" ]; then
+    SSH_PRIVATE_KEY_LOCAL="${SSH_PRIVATE_KEY}"
 
     if [ "${TRANSPORT}" == "unix" ]; then
         LISTEN="/var/run/cluster-autoscaler/vmware.sock"
@@ -738,9 +736,9 @@ else
     CONNECTTO="unix:/var/run/cluster-autoscaler/vmware.sock"
 fi
 
-eval echo_grey "Transport set to:${TRANSPORT}, listen endpoint at ${LISTEN}" $SILENT
+eval echo_grey "Transport set to:${TRANSPORT}, listen endpoint at ${LISTEN}" ${SILENT}
 
-export PATH=$PWD/bin:$PATH
+export PATH=${PWD}/bin:${PATH}
 
 # If CERT doesn't exist, create one autosigned
 if [ ! -f ${SSL_LOCATION}/privkey.pem ]; then
@@ -796,7 +794,7 @@ else
 fi
 
 # For vmware autoscaler
-if [ "$EXTERNAL_ETCD" = "true" ]; then
+if [ "${EXTERNAL_ETCD}" = "true" ]; then
     export EXTERNAL_ETCD_ARGS="--use-external-etcd"
     export ETCD_DST_DIR="/etc/etcd/ssl"
 else
@@ -808,92 +806,92 @@ fi
 export DOMAIN_NAME=$(openssl x509 -noout -subject -in ${SSL_LOCATION}/cert.pem -nameopt sep_multiline | grep 'CN=' | awk -F= '{print $2}' | sed -e 's/^[\s\t]*//')
 
 # Delete previous exixting version
-if [ "$RESUME" = "NO" ] && [ "${UPGRADE_CLUSTER}" == "NO" ]; then
+if [ "${RESUME}" = "NO" ] && [ "${UPGRADE_CLUSTER}" == "NO" ]; then
     echo_title "Launch custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
     delete-masterkube.sh --configuration-location=${CONFIGURATION_LOCATION} --govc-defs=${GOVCDEFS} --node-group=${NODEGROUP_NAME}
 elif [ "${UPGRADE_CLUSTER}" == "NO" ]; then
     echo_title "Resume custom ${MASTERKUBE} instance with ${TARGET_IMAGE}"
 else
     echo_title "Upgrade ${MASTERKUBE} instance with ${TARGET_IMAGE}"
-	./bin/upgrade-cluster.sh
-	exit
+    ./bin/upgrade-cluster.sh
+    exit
 fi
 
 mkdir -p ${TARGET_CONFIG_LOCATION}
 mkdir -p ${TARGET_CLUSTER_LOCATION}
 
-if [ "$RESUME" = "NO" ]; then
+if [ "${RESUME}" = "NO" ]; then
     cat ${GOVCDEFS} > ${TARGET_CONFIG_LOCATION}/buildenv
     cat > ${TARGET_CONFIG_LOCATION}/buildenv <<EOF
 export AWS_ROUTE53_ACCESSKEY=${AWS_ROUTE53_ACCESSKEY}
 export AWS_ROUTE53_PUBLIC_ZONE_ID=${AWS_ROUTE53_PUBLIC_ZONE_ID}
 export AWS_ROUTE53_SECRETKEY=${AWS_ROUTE53_SECRETKEY}
 export CLOUDPROVIDER_CONFIG=${CLOUDPROVIDER_CONFIG}
-export CNI_PLUGIN=$CNI_PLUGIN
-export CNI_PLUGIN_VERSION=$CNI_PLUGIN_VERSION
-export CONTROLNODES=$CONTROLNODES
-export CORESTOTAL="$CORESTOTAL"
-export DEFAULT_MACHINE=$DEFAULT_MACHINE
-export EXTERNAL_ETCD=$EXTERNAL_ETCD
-export FIRSTNODE=$FIRSTNODE
+export CNI_PLUGIN=${CNI_PLUGIN}
+export CNI_PLUGIN_VERSION=${CNI_PLUGIN_VERSION}
+export CONTROLNODES=${CONTROLNODES}
+export CORESTOTAL="${CORESTOTAL}"
+export DEFAULT_MACHINE=${DEFAULT_MACHINE}
+export EXTERNAL_ETCD=${EXTERNAL_ETCD}
+export FIRSTNODE=${FIRSTNODE}
 export GODADDY_API_KEY=${GODADDY_API_KEY}
 export GODADDY_API_SECRET=${GODADDY_API_SECRET}
 export GRPC_PROVIDER=${GRPC_PROVIDER}
-export HA_CLUSTER=$HA_CLUSTER
-export KUBECONFIG=$KUBECONFIG
-export KUBERNETES_PASSWORD=$KUBERNETES_PASSWORD
+export HA_CLUSTER=${HA_CLUSTER}
+export KUBECONFIG=${KUBECONFIG}
+export KUBERNETES_PASSWORD=${KUBERNETES_PASSWORD}
 export KUBERNETES_USER=${KUBERNETES_USER}
-export KUBERNETES_VERSION=$KUBERNETES_VERSION
-export LAUNCH_CA=$LAUNCH_CA
-export MASTERKUBE="$MASTERKUBE"
-export MAXAUTOPROVISIONNEDNODEGROUPCOUNT=$MAXAUTOPROVISIONNEDNODEGROUPCOUNT
-export MAXNODES=$MAXNODES
-export MAXTOTALNODES=$MAXTOTALNODES
-export MEMORYTOTAL="$MEMORYTOTAL"
-export MINNODES=$MINNODES
-export NET_DNS=$NET_DNS
-export NET_DOMAIN=$NET_DOMAIN
-export NET_GATEWAY=$NET_GATEWAY
-export NET_IP=$NET_IP
-export NET_MASK_CIDR=$NET_MASK_CIDR
-export NET_MASK=$NET_MASK
-export NFS_SERVER_ADDRESS=$NFS_SERVER_ADDRESS
-export NFS_SERVER_PATH=$NFS_SERVER_PATH
-export NFS_STORAGE_CLASS=$NFS_STORAGE_CLASS
-export NODEGROUP_NAME="$NODEGROUP_NAME"
-export OSDISTRO=$OSDISTRO
+export KUBERNETES_VERSION=${KUBERNETES_VERSION}
+export LAUNCH_CA=${LAUNCH_CA}
+export MASTERKUBE="${MASTERKUBE}"
+export MAXAUTOPROVISIONNEDNODEGROUPCOUNT=${MAXAUTOPROVISIONNEDNODEGROUPCOUNT}
+export MAXNODES=${MAXNODES}
+export MAXTOTALNODES=${MAXTOTALNODES}
+export MEMORYTOTAL="${MEMORYTOTAL}"
+export MINNODES=${MINNODES}
+export NET_DNS=${NET_DNS}
+export NET_DOMAIN=${NET_DOMAIN}
+export NET_GATEWAY=${NET_GATEWAY}
+export NET_IP=${NET_IP}
+export NET_MASK_CIDR=${NET_MASK_CIDR}
+export NET_MASK=${NET_MASK}
+export NFS_SERVER_ADDRESS=${NFS_SERVER_ADDRESS}
+export NFS_SERVER_PATH=${NFS_SERVER_PATH}
+export NFS_STORAGE_CLASS=${NFS_STORAGE_CLASS}
+export NODEGROUP_NAME="${NODEGROUP_NAME}"
+export OSDISTRO=${OSDISTRO}
 export PUBLIC_DOMAIN_NAME=${PUBLIC_DOMAIN_NAME}
-export PUBLIC_IP="$PUBLIC_IP"
-export REGISTRY=$REGISTRY
-export ROOT_IMG_NAME=$ROOT_IMG_NAME
-export SCALEDOWNDELAYAFTERADD=$SCALEDOWNDELAYAFTERADD
-export SCALEDOWNDELAYAFTERDELETE=$SCALEDOWNDELAYAFTERDELETE
-export SCALEDOWNDELAYAFTERFAILURE=$SCALEDOWNDELAYAFTERFAILURE
-export SCALEDOWNENABLED=$SCALEDOWNENABLED
-export SCALEDOWNUNEEDEDTIME=$SCALEDOWNUNEEDEDTIME
-export SCALEDOWNUNREADYTIME=$SCALEDOWNUNREADYTIME
-export SCHEME="$SCHEME"
-export SEED_IMAGE="$SEED_IMAGE"
-export SEED_USER=$SEED_USER
-export SSH_KEY_FNAME=$SSH_KEY_FNAME
-export SSH_KEY="$SSH_KEY"
-export SSH_PRIVATE_KEY=$SSH_PRIVATE_KEY
-export SSH_PUBLIC_KEY=$SSH_PUBLIC_KEY
+export PUBLIC_IP="${PUBLIC_IP}"
+export REGISTRY=${REGISTRY}
+export ROOT_IMG_NAME=${ROOT_IMG_NAME}
+export SCALEDOWNDELAYAFTERADD=${SCALEDOWNDELAYAFTERADD}
+export SCALEDOWNDELAYAFTERDELETE=${SCALEDOWNDELAYAFTERDELETE}
+export SCALEDOWNDELAYAFTERFAILURE=${SCALEDOWNDELAYAFTERFAILURE}
+export SCALEDOWNENABLED=${SCALEDOWNENABLED}
+export SCALEDOWNUNEEDEDTIME=${SCALEDOWNUNEEDEDTIME}
+export SCALEDOWNUNREADYTIME=${SCALEDOWNUNREADYTIME}
+export SCHEME="${SCHEME}"
+export SEED_IMAGE="${SEED_IMAGE}"
+export SEED_USER=${SEED_USER}
+export SSH_KEY_FNAME=${SSH_KEY_FNAME}
+export SSH_KEY="${SSH_KEY}"
+export SSH_PRIVATE_KEY=${SSH_PRIVATE_KEY}
+export SSH_PUBLIC_KEY=${SSH_PUBLIC_KEY}
 export SSL_LOCATION=${SSL_LOCATION}
 export TARGET_CLUSTER_LOCATION=${TARGET_CLUSTER_LOCATION}
 export TARGET_CONFIG_LOCATION=${TARGET_CONFIG_LOCATION}
 export TARGET_DEPLOY_LOCATION=${TARGET_DEPLOY_LOCATION}
-export TARGET_IMAGE=$TARGET_IMAGE
-export TRANSPORT=$TRANSPORT
-export UNREMOVABLENODERECHECKTIMEOUT=$UNREMOVABLENODERECHECKTIMEOUT
-export USE_DHCP_ROUTES_PRIVATE=$USE_DHCP_ROUTES_PRIVATE
-export USE_DHCP_ROUTES_PUBLIC=$USE_DHCP_ROUTES_PUBLIC
+export TARGET_IMAGE=${TARGET_IMAGE}
+export TRANSPORT=${TRANSPORT}
+export UNREMOVABLENODERECHECKTIMEOUT=${UNREMOVABLENODERECHECKTIMEOUT}
+export USE_DHCP_ROUTES_PRIVATE=${USE_DHCP_ROUTES_PRIVATE}
+export USE_DHCP_ROUTES_PUBLIC=${USE_DHCP_ROUTES_PUBLIC}
 export USE_K3S=${USE_K3S}
-export USE_KEEPALIVED=$USE_KEEPALIVED
+export USE_KEEPALIVED=${USE_KEEPALIVED}
 export USE_ZEROSSL=${USE_ZEROSSL}
-export VC_NETWORK_PRIVATE=$VC_NETWORK_PRIVATE
-export VC_NETWORK_PUBLIC=$VC_NETWORK_PUBLIC
-export WORKERNODES=$WORKERNODES
+export VC_NETWORK_PRIVATE=${VC_NETWORK_PRIVATE}
+export VC_NETWORK_PUBLIC=${VC_NETWORK_PUBLIC}
+export WORKERNODES=${WORKERNODES}
 export ZEROSSL_EAB_HMAC_SECRET=${ZEROSSL_EAB_HMAC_SECRET}
 export ZEROSSL_EAB_KID=${ZEROSSL_EAB_KID}
 EOF
@@ -911,6 +909,11 @@ if [ "${GOVC_FOLDER}" ]; then
     fi
 fi
 
+if [ "${GOVC_INSECURE}" == "1" ]; then
+    INSECURE=true
+else
+    INSECURE=false
+fi
 
 # Cloud init vendor-data
 cat >${TARGET_CONFIG_LOCATION}/vendordata.yaml <<EOF
@@ -919,43 +922,43 @@ package_update: true
 package_upgrade: true
 timezone: ${TZ}
 ssh_authorized_keys:
-    - ${SSH_KEY}
+  - ${SSH_KEY}
 users:
-    - default
+  - default
 system_info:
-    default_user:
-        name: ${KUBERNETES_USER}
+  default_user:
+    name: ${KUBERNETES_USER}
 EOF
 
 gzip -c9 <${TARGET_CONFIG_LOCATION}/vendordata.yaml | base64 -w 0 | tee > ${TARGET_CONFIG_LOCATION}/vendordata.base64
 
 IPADDRS=()
-NODE_IP=$NET_IP
+NODE_IP=${NET_IP}
 
-if [ "$PUBLIC_IP" != "DHCP" ]; then
-    IFS=/ read PUBLIC_NODE_IP PUBLIC_MASK_CIDR <<< "$PUBLIC_IP"
+if [ "${PUBLIC_IP}" != "DHCP" ]; then
+    IFS=/ read PUBLIC_NODE_IP PUBLIC_MASK_CIDR <<< "${PUBLIC_IP}"
 else
     PUBLIC_NODE_IP=DHCP
 fi
 
 # No external elb, use keep alived
-if [[ $FIRSTNODE > 0 ]]; then
+if [[ ${FIRSTNODE} > 0 ]]; then
     delete_host "${MASTERKUBE}"
     add_host ${NODE_IP} ${MASTERKUBE} ${MASTERKUBE}.${DOMAIN_NAME}
 
-    IPADDRS+=($NODE_IP)
-    NODE_IP=$(nextip $NODE_IP)
+    IPADDRS+=(${NODE_IP})
+    NODE_IP=$(nextip ${NODE_IP})
 
-    if [ "$PUBLIC_IP" != "DHCP" ]; then
-        PUBLIC_NODE_IP=$(nextip $PUBLIC_NODE_IP)
+    if [ "${PUBLIC_IP}" != "DHCP" ]; then
+        PUBLIC_NODE_IP=$(nextip ${PUBLIC_NODE_IP})
     fi
 fi
 
-if [ $HA_CLUSTER = "true" ]; then
-    TOTALNODES=$((WORKERNODES + $CONTROLNODES))
+if [ ${HA_CLUSTER} = "true" ]; then
+    TOTALNODES=$((WORKERNODES + ${CONTROLNODES}))
 else
     CONTROLNODES=0
-    TOTALNODES=$WORKERNODES
+    TOTALNODES=${WORKERNODES}
 fi
 
 PUBLIC_ROUTES_DEFS=$(build_routes ${NETWORK_PUBLIC_ROUTES[@]})
@@ -965,8 +968,8 @@ function create_vm() {
     local INDEX=$1
     local PUBLIC_NODE_IP=$2
     local NODE_IP=$3
-    local MACHINE_TYPE=$CONTROL_PLANE_MACHINE
-    local NODEINDEX=$INDEX
+    local MACHINE_TYPE=${CONTROL_PLANE_MACHINE}
+    local NODEINDEX=${INDEX}
     local MASTERKUBE_NODE=
     local IPADDR=
     local VMHOST=
@@ -974,23 +977,23 @@ function create_vm() {
     local NUM_VCPUS=
     local MEMSIZE=
 
-    if [ $NODEINDEX = 0 ]; then
+    if [ ${NODEINDEX} = 0 ]; then
         # node 0 is ELB on HA mode
-        if [ $HA_CLUSTER = "true" ]; then
-            MACHINE_TYPE=$NGINX_MACHINE
+        if [ ${HA_CLUSTER} = "true" ]; then
+            MACHINE_TYPE=${NGINX_MACHINE}
         fi
 
         MASTERKUBE_NODE="${MASTERKUBE}"
-    elif [[ $NODEINDEX > $CONTROLNODES ]]; then
-        NODEINDEX=$((INDEX - $CONTROLNODES))
+    elif [[ ${NODEINDEX} > ${CONTROLNODES} ]]; then
+        NODEINDEX=$((INDEX - ${CONTROLNODES}))
         MASTERKUBE_NODE="${NODEGROUP_NAME}-worker-0${NODEINDEX}"
-        MACHINE_TYPE=$WORKER_NODE_MACHINE
+        MACHINE_TYPE=${WORKER_NODE_MACHINE}
     else
         MASTERKUBE_NODE="${NODEGROUP_NAME}-master-0${NODEINDEX}"
     fi
 
     if [ -z "$(govc vm.info ${MASTERKUBE_NODE} 2>&1)" ]; then
-        if [ "$PUBLIC_NODE_IP" = "DHCP" ]; then
+        if [ "${PUBLIC_NODE_IP}" = "DHCP" ]; then
             NETWORK_DEFS=$(cat <<EOF
             {
                 "instance-id": "$(uuidgen)",
@@ -1002,13 +1005,13 @@ function create_vm() {
                         "eth0": {
                             "dhcp4": true,
                             "dhcp4-overrides": {
-                                "use-routes": $USE_DHCP_ROUTES_PUBLIC
+                                "use-routes": ${USE_DHCP_ROUTES_PUBLIC}
                             }
                         },
                         "eth1": {
-                            "gateway4": "$NET_GATEWAY",
+                            "gateway4": "${NET_GATEWAY}",
                             "addresses": [
-                                "$NODE_IP/$NET_MASK_CIDR"
+                                "${NODE_IP}/${NET_MASK_CIDR}"
                             ]
                         }
                     }
@@ -1026,19 +1029,19 @@ EOF
                     "version": 2,
                     "ethernets": {
                         "eth0": {
-                            "gateway4": "$NET_GATEWAY",
+                            "gateway4": "${NET_GATEWAY}",
                             "addresses": [
-                                "$PUBLIC_NODE_IP/$PUBLIC_MASK_CIDR"
+                                "${PUBLIC_NODE_IP}/${PUBLIC_MASK_CIDR}"
                             ],
                             "nameservers": {
                                 "addresses": [
-                                    "$NET_DNS"
+                                    "${NET_DNS}"
                                 ]
                             }
                         },
                         "eth1": {
                             "addresses": [
-                                "$NODE_IP/$NET_MASK_CIDR"
+                                "${NODE_IP}/${NET_MASK_CIDR}"
                             ]
                         }
                     }
@@ -1049,35 +1052,37 @@ EOF
         fi
 
         if [ ${#NETWORK_PUBLIC_ROUTES[@]} -gt 0 ]; then
-            NETWORK_DEFS=$(echo ${NETWORK_DEFS} | jq --argjson ROUTES "$PUBLIC_ROUTES_DEFS" '.network.ethernets.eth0.routes = $ROUTES')
+            NETWORK_DEFS=$(echo ${NETWORK_DEFS} | jq --argjson ROUTES "${PUBLIC_ROUTES_DEFS}" '.network.ethernets.eth0.routes = $ROUTES')
         fi
 
         if [ ${#NETWORK_PRIVATE_ROUTES[@]} -gt 0 ]; then
-            NETWORK_DEFS=$(echo ${NETWORK_DEFS} | jq --argjson ROUTES "$PRIVATE_ROUTES_DEFS" '.network.ethernets.eth1.routes = $ROUTES')
+            NETWORK_DEFS=$(echo ${NETWORK_DEFS} | jq --argjson ROUTES "${PRIVATE_ROUTES_DEFS}" '.network.ethernets.eth1.routes = $ROUTES')
         fi
 
-        echo ${NETWORK_DEFS} | jq . > ${TARGET_CONFIG_LOCATION}/metadata-$INDEX.json
+        echo ${NETWORK_DEFS} | jq . > ${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.json
 
         # Cloud init meta-data
-        echo ${NETWORK_DEFS} | yq -P - | tee > /dev/null > ${TARGET_CONFIG_LOCATION}/metadata-$INDEX.yaml
+        echo "#cloud-config" > ${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.yaml
+        echo ${NETWORK_DEFS} | yq -P - | tee > /dev/null > ${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.yaml
 
         # Cloud init user-data
         cat > ${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.yaml <<EOF
 #cloud-config
+growpart:
+  mode: auto
+  devices: ["/"]
+  ignore_growroot_disabled: false
 runcmd:
-- 'echo 1 > /sys/block/sda/device/rescan'
-- growpart /dev/sda 1
-- resize2fs /dev/sda1
 - echo "Create ${MASTERKUBE_NODE}" > /var/log/masterkube.log
 EOF
 
         gzip -c9 <${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.json | base64 -w 0 | tee > ${TARGET_CONFIG_LOCATION}/metadata-${INDEX}.base64
         gzip -c9 <${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.yaml | base64 -w 0 | tee > ${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.base64
 
-        MACHINE_TYPE=$(echo $MACHINE_DEFS | jq --arg MACHINE $MACHINE_TYPE 'to_entries[]|select(.key == $MACHINE)|.value')
-        DISK_SIZE=$(echo $MACHINE_TYPE | jq -r .disksize)
-        NUM_VCPUS=$(echo $MACHINE_TYPE | jq -r .vcpus)
-        MEMSIZE=$(echo $MACHINE_TYPE | jq -r .memsize)
+        MACHINE_TYPE=$(echo ${MACHINE_DEFS} | jq --arg MACHINE ${MACHINE_TYPE} 'to_entries[]|select(.key == $MACHINE)|.value')
+        DISK_SIZE=$(echo ${MACHINE_TYPE} | jq -r .disksize)
+        NUM_VCPUS=$(echo ${MACHINE_TYPE} | jq -r .vcpus)
+        MEMSIZE=$(echo ${MACHINE_TYPE} | jq -r .memsize)
         DISK_SIZE=$(echo "${DISK_SIZE} / 1024" | bc)
 
         echo_line
@@ -1097,11 +1102,11 @@ EOF
             -e guestinfo.userdata="$(cat ${TARGET_CONFIG_LOCATION}/userdata-${INDEX}.base64)" \
             -e guestinfo.userdata.encoding="gzip+base64" \
             -e guestinfo.vendordata="$(cat ${TARGET_CONFIG_LOCATION}/vendordata.base64)" \
-            -e guestinfo.vendordata.encoding="gzip+base64" $SILENT
+            -e guestinfo.vendordata.encoding="gzip+base64" ${SILENT}
 
         echo_title "Power On ${MASTERKUBE_NODE}"
 
-        eval govc vm.power -on "${MASTERKUBE_NODE}" $SILENT
+        eval govc vm.power -on "${MASTERKUBE_NODE}" ${SILENT}
 
         echo_title "Wait for IP from ${MASTERKUBE_NODE}"
 
@@ -1109,10 +1114,10 @@ EOF
         VMHOST=$(govc vm.info "${MASTERKUBE_NODE}" | grep 'Host:' | awk '{print $2}')
 
         echo_title "Prepare ${MASTERKUBE_NODE} instance with IP:${IPADDR}"
-        eval govc host.autostart.add -host="${VMHOST}" "${MASTERKUBE_NODE}" $SILENT
-        eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ $SILENT
-        eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} mkdir -p /home/${KUBERNETES_USER}/cluster $SILENT
-        eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin $SILENT
+        eval govc host.autostart.add -host="${VMHOST}" "${MASTERKUBE_NODE}" ${SILENT}
+        eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ ${SILENT}
+        eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} mkdir -p /home/${KUBERNETES_USER}/cluster ${SILENT}
+        eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin ${SILENT}
 
         # Update /etc/hosts
         delete_host "${MASTERKUBE_NODE}"
@@ -1124,26 +1129,26 @@ EOF
     #echo_separator
 }
 
-for INDEX in $(seq $FIRSTNODE $TOTALNODES)
+for INDEX in $(seq ${FIRSTNODE} ${TOTALNODES})
 do
-    create_vm $INDEX $PUBLIC_NODE_IP $NODE_IP &
+    create_vm ${INDEX} ${PUBLIC_NODE_IP} ${NODE_IP} &
 
-    IPADDRS+=($NODE_IP)
+    IPADDRS+=(${NODE_IP})
 
         # Reserve 2 ip for potentiel HA cluster
-    if [[ "$HA_CLUSTER" == "false" ]] && [[ $INDEX = 0 ]]; then
-        NODE_IP=$(nextip $NODE_IP)
-        NODE_IP=$(nextip $NODE_IP)
-        if [ "$PUBLIC_IP" != "DHCP" ]; then
-            PUBLIC_NODE_IP=$(nextip $PUBLIC_NODE_IP)
-            PUBLIC_NODE_IP=$(nextip $PUBLIC_NODE_IP)
+    if [[ "${HA_CLUSTER}" == "false" ]] && [[ ${INDEX} = 0 ]]; then
+        NODE_IP=$(nextip ${NODE_IP})
+        NODE_IP=$(nextip ${NODE_IP})
+        if [ "${PUBLIC_IP}" != "DHCP" ]; then
+            PUBLIC_NODE_IP=$(nextip ${PUBLIC_NODE_IP})
+            PUBLIC_NODE_IP=$(nextip ${PUBLIC_NODE_IP})
         fi
     fi
 
-    NODE_IP=$(nextip $NODE_IP)
+    NODE_IP=$(nextip ${NODE_IP})
 
-    if [ "$PUBLIC_IP" != "DHCP" ]; then
-        PUBLIC_NODE_IP=$(nextip $PUBLIC_NODE_IP)
+    if [ "${PUBLIC_IP}" != "DHCP" ]; then
+        PUBLIC_NODE_IP=$(nextip ${PUBLIC_NODE_IP})
     fi
 done
 
@@ -1152,20 +1157,20 @@ wait_jobs_finish
 CLUSTER_NODES=
 ETCD_ENDPOINT=
 
-if [ "$HA_CLUSTER" = "true" ]; then
-    for INDEX in $(seq 1 $CONTROLNODES)
+if [ "${HA_CLUSTER}" = "true" ]; then
+    for INDEX in $(seq 1 ${CONTROLNODES})
     do
         MASTERKUBE_NODE="${NODEGROUP_NAME}-master-0${INDEX}"
-        IPADDR="${IPADDRS[$INDEX]}"
+        IPADDR="${IPADDRS[${INDEX}]}"
         NODE_DNS="${MASTERKUBE_NODE}.${DOMAIN_NAME}:${IPADDR}"
 
-        if [ -z "$CLUSTER_NODES" ]; then
+        if [ -z "${CLUSTER_NODES}" ]; then
             CLUSTER_NODES="${NODE_DNS}"
         else
             CLUSTER_NODES="${CLUSTER_NODES},${NODE_DNS}"
         fi
 
-        if [ "$EXTERNAL_ETCD" = "true" ]; then
+        if [ "${EXTERNAL_ETCD}" = "true" ]; then
             if [ -z "${ETCD_ENDPOINT}" ]; then
                 ETCD_ENDPOINT="https://${IPADDR}:2379"
             else
@@ -1174,42 +1179,42 @@ if [ "$HA_CLUSTER" = "true" ]; then
         fi
     done
 
-    echo "export CLUSTER_NODES=$CLUSTER_NODES" >> ${TARGET_CONFIG_LOCATION}/buildenv
+    echo "export CLUSTER_NODES=${CLUSTER_NODES}" >> ${TARGET_CONFIG_LOCATION}/buildenv
 
-    if [ "$EXTERNAL_ETCD" = "true" ]; then
+    if [ "${EXTERNAL_ETCD}" = "true" ]; then
         echo_title "Created etcd cluster: ${CLUSTER_NODES}"
 
         prepare-etcd.sh --node-group=${NODEGROUP_NAME} --cluster-nodes="${CLUSTER_NODES}"
 
-        for INDEX in $(seq 1 $CONTROLNODES)
+        for INDEX in $(seq 1 ${CONTROLNODES})
         do
             if [ ! -f ${TARGET_CONFIG_LOCATION}/etdc-0${INDEX}-prepared ]; then
-                IPADDR="${IPADDRS[$INDEX]}"
+                IPADDR="${IPADDRS[${INDEX}]}"
 
                 echo_title "Start etcd node: ${IPADDR}"
                 
-                eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ $SILENT
+                eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ ${SILENT}
                 eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster ${SILENT}
-                eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin $SILENT
+                eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin ${SILENT}
 
-                eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo install-etcd.sh --user=${KUBERNETES_USER} --cluster-nodes="${CLUSTER_NODES}" --node-index="$INDEX" $SILENT
+                eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo install-etcd.sh --user=${KUBERNETES_USER} --cluster-nodes="${CLUSTER_NODES}" --node-index="${INDEX}" ${SILENT}
 
                 touch ${TARGET_CONFIG_LOCATION}/etdc-0${INDEX}-prepared
             fi
         done
     fi
 
-    if [ "$USE_KEEPALIVED" = "YES" ]; then
+    if [ "${USE_KEEPALIVED}" = "YES" ]; then
         echo_title "Created keepalived cluster: ${CLUSTER_NODES}"
 
-        for INDEX in $(seq 1 $CONTROLNODES)
+        for INDEX in $(seq 1 ${CONTROLNODES})
         do
             if [ ! -f ${TARGET_CONFIG_LOCATION}/keepalived-0${INDEX}-prepared ]; then
-                IPADDR="${IPADDRS[$INDEX]}"
+                IPADDR="${IPADDRS[${INDEX}]}"
 
                 echo_title "Start keepalived node: ${IPADDR}"
 
-                case "$INDEX" in
+                case "${INDEX}" in
                     1)
                         KEEPALIVED_PEER1=${IPADDRS[2]}
                         KEEPALIVED_PEER2=${IPADDRS[3]}
@@ -1229,12 +1234,12 @@ if [ "$HA_CLUSTER" = "true" ]; then
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo /usr/local/bin/install-keepalived.sh \
                     "${IPADDRS[0]}" \
-                    "$KUBERNETES_PASSWORD" \
+                    "${KUBERNETES_PASSWORD}" \
                     "$((80-INDEX))" \
-                    ${IPADDRS[$INDEX]} \
+                    ${IPADDRS[${INDEX}]} \
                     ${KEEPALIVED_PEER1} \
                     ${KEEPALIVED_PEER2} \
-                    ${KEEPALIVED_STATUS} $SILENT
+                    ${KEEPALIVED_STATUS} ${SILENT}
 
                 touch ${TARGET_CONFIG_LOCATION}/keepalived-0${INDEX}-prepared
             fi
@@ -1242,44 +1247,44 @@ if [ "$HA_CLUSTER" = "true" ]; then
     fi
 else
     IPADDR="${IPADDRS[0]}"
-    IPRESERVED1=$(nextip $IPADDR)
-    IPRESERVED2=$(nextip $IPRESERVED1)
+    IPRESERVED1=$(nextip ${IPADDR})
+    IPRESERVED2=$(nextip ${IPRESERVED1})
     CLUSTER_NODES="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDR},${NODEGROUP_NAME}-master-02.${DOMAIN_NAME}:${IPRESERVED1},${NODEGROUP_NAME}-master-03.${DOMAIN_NAME}:${IPRESERVED2}"
 
-    echo "export CLUSTER_NODES=$CLUSTER_NODES" >> ${TARGET_CONFIG_LOCATION}/buildenv
+    echo "export CLUSTER_NODES=${CLUSTER_NODES}" >> ${TARGET_CONFIG_LOCATION}/buildenv
 fi
 
-for INDEX in $(seq $FIRSTNODE $TOTALNODES)
+for INDEX in $(seq ${FIRSTNODE} ${TOTALNODES})
 do
-    NODEINDEX=$INDEX
-    if [ $NODEINDEX = 0 ]; then
+    NODEINDEX=${INDEX}
+    if [ ${NODEINDEX} = 0 ]; then
         MASTERKUBE_NODE="${MASTERKUBE}"
-    elif [[ $NODEINDEX > $CONTROLNODES ]]; then
-        NODEINDEX=$((INDEX - $CONTROLNODES))
+    elif [[ ${NODEINDEX} > ${CONTROLNODES} ]]; then
+        NODEINDEX=$((INDEX - ${CONTROLNODES}))
         MASTERKUBE_NODE="${NODEGROUP_NAME}-worker-0${NODEINDEX}"
     else
         MASTERKUBE_NODE="${NODEGROUP_NAME}-master-0${NODEINDEX}"
     fi
 
     if [ -f ${TARGET_CONFIG_LOCATION}/kubeadm-0${INDEX}-prepared ]; then
-        echo_title "Already prepared VM $MASTERKUBE_NODE"
+        echo_title "Already prepared VM ${MASTERKUBE_NODE}"
     else
-        IPADDR="${IPADDRS[$INDEX]}"
+        IPADDR="${IPADDRS[${INDEX}]}"
         VMUUID=$(govc vm.info -json ${MASTERKUBE_NODE} | jq -r '.VirtualMachines[0].Config.Uuid//""')
 
         echo_title "Prepare VM ${MASTERKUBE_NODE}, UUID=${VMUUID} with IP:${IPADDR}"
 
-        eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ $SILENT
-        eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin $SILENT
+        eval scp ${SCP_OPTIONS} bin ${KUBERNETES_USER}@${IPADDR}:~ ${SILENT}
+        eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin ${SILENT}
 
-        if [ $INDEX = 0 ]; then
-            if [ "$HA_CLUSTER" = "true" ]; then
+        if [ ${INDEX} = 0 ]; then
+            if [ "${HA_CLUSTER}" = "true" ]; then
                 echo_blue_bold "Start load balancer ${MASTERKUBE_NODE} instance"
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo install-load-balancer.sh \
                     --cluster-nodes="${CLUSTER_NODES}" \
                     --control-plane-endpoint=${MASTERKUBE}.${DOMAIN_NAME} \
-                    --listen-ip=$NET_IP $SILENT
+                    --listen-ip=${NET_IP} ${SILENT}
             else
                 echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} single instance master node, kubernetes version=${KUBERNETES_VERSION}"
 
@@ -1297,19 +1302,19 @@ do
                     --node-group=${NODEGROUP_NAME} \
                     --node-index=${NODEINDEX} \
                     --cni=${CNI_PLUGIN} \
-                    --net-if=$NET_IF \
-                    --kubernetes-version="${KUBERNETES_VERSION}" $SILENT
+                    --net-if=${NET_IF} \
+                    --kubernetes-version="${KUBERNETES_VERSION}" ${SILENT}
 
-                eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ${TARGET_CLUSTER_LOCATION}/ $SILENT
+                eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ${TARGET_CLUSTER_LOCATION}/ ${SILENT}
             fi
         else
-            if [ "$HA_CLUSTER" = "true" ]; then
+            if [ "${HA_CLUSTER}" = "true" ]; then
                 NODEINDEX=$((INDEX-1))
             else
-                NODEINDEX=$INDEX
+                NODEINDEX=${INDEX}
             fi
 
-            if [ $NODEINDEX = 0 ]; then
+            if [ ${NODEINDEX} = 0 ]; then
                 echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} instance master node number ${INDEX}, kubernetes version=${KUBERNETES_VERSION}"
 
                 ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
@@ -1329,10 +1334,10 @@ do
                     --etcd-endpoint="${ETCD_ENDPOINT}" \
                     --ha-cluster=true \
                     --cni=${CNI_PLUGIN} \
-                    --net-if=$NET_IF \
-                    --kubernetes-version="${KUBERNETES_VERSION}" $SILENT
+                    --net-if=${NET_IF} \
+                    --kubernetes-version="${KUBERNETES_VERSION}" ${SILENT}
 
-                eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ${TARGET_CLUSTER_LOCATION}/ $SILENT
+                eval scp ${SCP_OPTIONS} ${KUBERNETES_USER}@${IPADDR}:/etc/cluster/* ${TARGET_CLUSTER_LOCATION}/ ${SILENT}
 
                 echo_blue_dot_title "Wait for ELB start on IP: ${IPADDRS[0]}"
 
@@ -1345,10 +1350,10 @@ do
                 echo
 
                 echo -n ${IPADDRS[0]}:6443 > ${TARGET_CLUSTER_LOCATION}/manager-ip
-            elif [[ $INDEX > $CONTROLNODES ]] || [ "$HA_CLUSTER" = "false" ]; then
+            elif [[ ${INDEX} > ${CONTROLNODES} ]] || [ "${HA_CLUSTER}" = "false" ]; then
                     echo_blue_bold "Join node ${MASTERKUBE_NODE} instance worker node, kubernetes version=${KUBERNETES_VERSION}"
 
-                    eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
+                    eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster ${SILENT}
 
                     eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
                         --use-k3s=${USE_K3S} \
@@ -1360,12 +1365,12 @@ do
                         --node-index=${NODEINDEX} \
                         --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
                         --etcd-endpoint="${ETCD_ENDPOINT}" \
-                        --net-if=$NET_IF \
-                        --cluster-nodes="${CLUSTER_NODES}" $SILENT
+                        --net-if=${NET_IF} \
+                        --cluster-nodes="${CLUSTER_NODES}" ${SILENT}
             else
                 echo_blue_bold "Join node ${MASTERKUBE_NODE} instance master node, kubernetes version=${KUBERNETES_VERSION}"
 
-                eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster $SILENT
+                eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster ${SILENT}
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
                     --use-k3s=${USE_K3S} \
@@ -1379,12 +1384,12 @@ do
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
                     --etcd-endpoint="${ETCD_ENDPOINT}" \
                     --cluster-nodes="${CLUSTER_NODES}" \
-                    --net-if=$NET_IF \
-                    --control-plane=true $SILENT
+                    --net-if=${NET_IF} \
+                    --control-plane=true ${SILENT}
             fi
         fi
 
-        echo $MASTERKUBE_NODE > ${TARGET_CONFIG_LOCATION}/kubeadm-0${INDEX}-prepared
+        echo ${MASTERKUBE_NODE} > ${TARGET_CONFIG_LOCATION}/kubeadm-0${INDEX}-prepared
     fi
 
     echo_separator
@@ -1399,28 +1404,22 @@ TOKEN=$(cat ${TARGET_CLUSTER_LOCATION}/token)
 CACERT=$(cat ${TARGET_CLUSTER_LOCATION}/ca.cert)
 
 kubectl create secret generic autoscaler-ssh-keys -n kube-system --dry-run=client -o yaml \
-	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
-	--from-file=id_rsa="${SSH_PRIVATE_KEY}" \
-	--from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
+    --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
+    --from-file=id_rsa="${SSH_PRIVATE_KEY}" \
+    --from-file=id_rsa.pub="${SSH_PUBLIC_KEY}" | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 echo_title "Write vsphere autoscaler provider config"
 
 if [ ${GRPC_PROVIDER} = "grpc" ]; then
     cat > ${TARGET_CONFIG_LOCATION}/${CLOUDPROVIDER_CONFIG} <<EOF
     {
-        "address": "$CONNECTTO",
+        "address": "${CONNECTTO}",
         "secret": "vmware",
         "timeout": 300
     }
 EOF
 else
-    echo "address: $CONNECTTO" > ${TARGET_CONFIG_LOCATION}/${CLOUDPROVIDER_CONFIG}
-fi
-
-if [ "${GOVC_INSECURE}" == "1" ]; then
-    INSECURE=true
-else
-    INSECURE=false
+    echo "address: ${CONNECTTO}" > ${TARGET_CONFIG_LOCATION}/${CLOUDPROVIDER_CONFIG}
 fi
 
 AUTOSCALER_CONFIG=$(cat <<EOF
@@ -1546,7 +1545,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
 EOF
 )
 
-echo "$AUTOSCALER_CONFIG" | jq . > ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
+echo "${AUTOSCALER_CONFIG}" | jq . > ${TARGET_CONFIG_LOCATION}/kubernetes-vmware-autoscaler.json
 
 source ./bin/create-deployment.sh
 
