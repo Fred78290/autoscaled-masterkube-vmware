@@ -1,3 +1,22 @@
+SSH_OPTIONS="-q -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+SCP_OPTIONS="${SSH_OPTIONS} -p -r"
+OSDISTRO=$(uname -s)
+
+function add_host() {
+    local LINE=
+
+    for ARG in $@
+    do
+        if [ -n "${LINE}" ]; then
+            LINE="${LINE} ${ARG}"
+        else
+            LINE="${ARG}     "
+        fi
+    done
+
+    sudo bash -c "echo '${LINE}' >> /etc/hosts"
+}
+
 function verbose() {
     if [ ${VERBOSE} = "YES" ]; then
         eval "$1"
@@ -85,11 +104,19 @@ if [ "$(uname -s)" == "Darwin" ]; then
     alias sed=gsed
     alias getopt=/usr/local/opt/gnu-getopt/bin/getopt
 
+    function delete_host() {
+        sudo gsed -i "/$1/d" /etc/hosts
+    }
+
     TZ=$(sudo systemsetup -gettimezone | awk -F: '{print $2}' | tr -d ' ')
     ISODIR=~/.local/vmware/cache/iso
 else
     TZ=$(cat /etc/timezone)
     ISODIR=~/.local/vmware/cache
+
+    function delete_host() {
+        sudo sed -i "/$1/d" /etc/hosts
+    }
 fi
 
 for MANDATORY in kubectl govc jq yq cfssl

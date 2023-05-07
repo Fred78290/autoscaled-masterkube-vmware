@@ -940,8 +940,8 @@ fi
 
 # No external elb, use keep alived
 if [[ $FIRSTNODE > 0 ]]; then
-    sudo sed -i -e "/${MASTERKUBE}/d" /etc/hosts
-    sudo bash -c "echo '${NODE_IP} ${MASTERKUBE} ${MASTERKUBE}.${DOMAIN_NAME}' >> /etc/hosts"
+    delete_host "${MASTERKUBE}"
+    add_host ${NODE_IP} ${MASTERKUBE} ${MASTERKUBE}.${DOMAIN_NAME}
 
     IPADDRS+=($NODE_IP)
     NODE_IP=$(nextip $NODE_IP)
@@ -1115,8 +1115,8 @@ EOF
         eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo cp /home/${KUBERNETES_USER}/bin/* /usr/local/bin $SILENT
 
         # Update /etc/hosts
-        sudo sed -i -e "/${MASTERKUBE_NODE}/d" /etc/hosts
-        sudo bash -c "echo '${NODE_IP} ${MASTERKUBE_NODE} ${MASTERKUBE_NODE}.${DOMAIN_NAME}' >> /etc/hosts"
+        delete_host "${MASTERKUBE_NODE}"
+        add_host ${NODE_IP} ${MASTERKUBE_NODE} ${MASTERKUBE_NODE}.${DOMAIN_NAME}
     else
         echo_title "Already running ${MASTERKUBE_NODE} instance"
     fi

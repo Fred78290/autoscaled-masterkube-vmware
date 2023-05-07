@@ -2,8 +2,6 @@
 set -e
 
 CURDIR=$(dirname $0)
-SSH_OPTIONS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
-SCP_OPTIONS="${SSH_OPTIONS} -p -r"
 
 KUBECONFIG_CONTEXT=k8s-${MASTERKUBE}-admin@${NODEGROUP_NAME}
 
