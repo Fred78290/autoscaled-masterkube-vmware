@@ -35,12 +35,12 @@ function echo_blue_dot() {
 
 function echo_blue_dot_title() {
 	# echo message in blue and bold
-	>&2 echo -n -e "\x1B[90m= \x1B[39m\x1B[1m\x1B[34m$1\x1B[0m\x1B[39m"
+    >&2 echo -n -e "\x1B[90m= $(date '+%Y-%m-%d %T') \x1B[39m\x1B[1m\x1B[34m$1\x1B[0m\x1B[39m"
 }
 
 function echo_blue_bold() {
 	# echo message in blue and bold
-	>&2 echo -e "\x1B[90m= \x1B[39m\x1B[1m\x1B[34m$1\x1B[0m\x1B[39m"
+    >&2 echo -e "\x1B[90m= $(date '+%Y-%m-%d %T') \x1B[39m\x1B[1m\x1B[34m$1\x1B[0m\x1B[39m"
 }
 
 function echo_title() {
@@ -63,7 +63,7 @@ function echo_red() {
 
 function echo_red_bold() {
 	# echo message in blue and bold
-	>&2 echo -e "\x1B[90m= \x1B[31m\x1B[1m\x1B[31m$1\x1B[0m\x1B[39m"
+    >&2 echo -e "\x1B[90m= $(date '+%Y-%m-%d %T') \x1B[31m\x1B[1m\x1B[31m$1\x1B[0m\x1B[39m"
 }
 
 function echo_separator() {
