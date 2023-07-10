@@ -1500,6 +1500,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
             "template-name": "${TARGET_IMAGE}",
             "template": false,
             "linked": false,
+			"allow-upgrade": false,
             "customization": "${GOVC_CUSTOMIZATION}",
             "network": {
                 "domain": "${NET_DOMAIN}",
