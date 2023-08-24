@@ -717,7 +717,7 @@ if [ "${LAUNCH_CA}" != "YES" ]; then
     elif [ "${TRANSPORT}" == "tcp" ]; then
         if [ "${OSDISTRO}" == "Linux" ]; then
             TRANSPORT_IF=$(ip route get 1 | awk '{print $5;exit}')
-            IPADDR=$(ip addr show ${NETRANSPORT_IFT_IF} | grep -m 1 "inet\s" | tr '/' ' ' | awk '{print $2}')
+            IPADDR=$(ip addr show ${TRANSPORT_IF} | grep -m 1 "inet\s" | tr '/' ' ' | awk '{print $2}')
         else
             TRANSPORT_IF=$(route get 1 | grep -m 1 interface | awk '{print $2}')
             IPADDR=$(ifconfig ${TRANSPORT_IF} | grep -m 1 "inet\s" | sed -n 1p | awk '{print $2}')
