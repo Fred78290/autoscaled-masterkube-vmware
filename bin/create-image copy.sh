@@ -235,8 +235,6 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         done
         echo
 
-        sleep 5
-
         echo_blue_bold "${SEEDIMAGE} is ready"
     else
         echo_red_bold "Import failed!"
@@ -407,9 +405,18 @@ SHELL
 fi
 EOF
 
-if [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
-    echo "prepare rke2 image"
+echo "KUBE_DISTRIBUTION=${KUBE_DISTRIBUTION}"
 
+if [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
+	echo "Found rke2"
+elif [ ${KUBE_DISTRIBUTION} == "k3s" ]; then
+	echo "Found rke2"
+else
+	echo "Found other"
+fi
+
+if [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
+echo "prepare rke2"
     cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
     curl -sfL https://get.rke2.io | INSTALL_RKE2_CHANNEL="${KUBERNETES_VERSION}" sh -
 
@@ -421,7 +428,7 @@ if [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
     echo "RKE2_AGENT_ARGS=" > /etc/systemd/system/rke2-agent.env
     echo "RKE2_DISABLE_ARGS=" > /etc/systemd/system/rke2.disabled.env
 
-    cat > /etc/systemd/system/rke2-server.service.d/10-rke2.conf <<"SHELL"
+    cat > tee /etc/systemd/system/rke2-server.service.d/10-rke2.conf <<"SHELL"
 [Service]
 Environment="KUBELET_ARGS=--kubelet-arg=cloud-provider=external --kubelet-arg=fail-swap-on=false"
 EnvironmentFile=-/etc/default/%N
@@ -449,8 +456,6 @@ SHELL
 EOF
 
 elif [ "${KUBE_DISTRIBUTION}" == "k3s" ]; then
-    echo "prepare k3s image"
-
     cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
     curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${KUBERNETES_VERSION}" INSTALL_K3S_SKIP_ENABLE=true sh -
 
@@ -477,8 +482,6 @@ SHELL
 EOF
 
 else
-    echo "prepare kubeadm image"
-
     cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
     function pull_image() {
         DOCKER_IMAGES=$(curl -s $1 | grep -E "\simage: " | sed -E 's/.+image: (.+)/\1/g')
@@ -682,6 +685,8 @@ EOF
 
 fi
 
+exit
+
 cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
 apt dist-upgrade -y
 apt autoremove -y
@@ -762,8 +767,6 @@ do
     sleep 1
 done
 echo
-
-sleep 5
 
 echo_blue_bold "Created image ${TARGET_IMAGE} with kubernetes version ${KUBERNETES_VERSION}"
 

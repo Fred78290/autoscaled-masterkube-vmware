@@ -30,7 +30,7 @@ K8_OPTIONS="--ignore-preflight-errors=All --config=${KUBEADM_CONFIG}"
 VMUUID=
 CSI_REGION=home
 CSI_ZONE=office
-USE_K3S=false
+KUBE_DISTRIBUTION=kubeadm
 ETCD_ENDPOINT=
 
 if [ "$(uname -p)" == "aarch64" ]; then
@@ -39,7 +39,7 @@ else
 	ARCH="amd64"
 fi
 
-TEMP=$(getopt -o xm:g:r:i:c:n:k: --long etcd-endpoint:,use-k3s:,csi-region:,csi-zone:,vm-uuid:,allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
+TEMP=$(getopt -o xm:g:r:i:c:n:k: --long etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -66,8 +66,16 @@ while true; do
         MASTER_NODE_ALLOW_DEPLOYMENT=$2
         shift 2
         ;;
-    --use-k3s)
-        USE_K3S=$2
+    --k8s-distribution)
+        case "$2" in
+            kubeadm|k3s|rke2)
+                KUBE_DISTRIBUTION=$2
+                ;;
+            *)
+                echo "Unsupported kubernetes distribution: $2"
+                exit 1
+                ;;
+        esac
         shift 2
         ;;
     -r|--container-runtime)
@@ -186,7 +194,76 @@ if [ "$HA_CLUSTER" = "true" ]; then
     done
 fi
 
-if [ ${USE_K3S} == "true" ]; then
+if [ ${KUBE_DISTRIBUTION} == "rke2" ]; then
+    ANNOTE_MASTER=true
+    CERT_SANS="${LOAD_BALANCER_IP},${CONTROL_PLANE_ENDPOINT_HOST},${CONTROL_PLANE_ENDPOINT_HOST%%.*}"
+
+    for CERT_EXTRA in ${CERT_EXTRA_SANS[*]} 
+    do
+        CERT_SANS="${CERT_SANS},${CERT_EXTRA}"
+    done
+
+    for CLUSTER_NODE in ${CLUSTER_NODES[*]}
+    do
+        IFS=: read HOST IP <<< $CLUSTER_NODE
+        [ -n ${IP} ] && CERT_SANS="${CERT_SANS},${IP}"
+        [ -n ${HOST} ] && CERT_SANS="${CERT_SANS},${HOST}"
+        [ -n ${HOST} ] && CERT_SANS="${CERT_SANS},${HOST%%.*}"
+    done
+
+    echo "RKE2_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --kubelet-arg=max-pods=${MAX_PODS} --node-name=${HOSTNAME} --advertise-address=${APISERVER_ADVERTISE_ADDRESS} --advertise-port=${APISERVER_ADVERTISE_PORT} --tls-san=${CERT_SANS}'" > /etc/systemd/system/rke2.env
+    echo "RKE2_DISABLE_ARGS='--disable-cloud-controller --disable=rke2-ingress-nginx --disable=rke2-metrics-server'" > /etc/systemd/system/rke2.disabled.env
+
+    if [ "$HA_CLUSTER" = "true" ]; then
+        if [ "${EXTERNAL_ETCD}" == "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
+            echo "RKE2_SERVER_ARGS='--disable-etcd --datastore-endpoint=${ETCD_ENDPOINT} --datastore-cafile /etc/etcd/ssl/ca.pem --datastore-certfile /etc/etcd/ssl/etcd.pem --datastore-keyfile /etc/etcd/ssl/etcd-key.pem'" > /etc/systemd/system/rke2-server.env
+        else
+            echo "RKE2_SERVER_ARGS=--cluster-init" > /etc/systemd/system/rke2-server.env
+        fi
+    fi
+
+    echo -n "Start rke2-server service"
+
+    systemctl enable rke2-server.service
+    systemctl start rke2-server.service
+
+    while [ ! -f /etc/rancher/rke2/rke2.yaml ];
+    do
+        echo -n "."
+        sleep 1
+    done
+
+    echo
+
+    mkdir -p $CLUSTER_DIR/kubernetes/pki
+
+    mkdir -p $HOME/.kube
+    cp -i /etc/rancher/rke2/rke2.yaml $HOME/.kube/config
+    chown $(id -u):$(id -g) $HOME/.kube/config
+
+    cp /etc/rancher/rke2/rke2.yaml $CLUSTER_DIR/config
+    cp /var/lib/rancher/rke2/server/token $CLUSTER_DIR/token
+    cp -r /var/lib/rancher/rke2/server/tls/* $CLUSTER_DIR/kubernetes/pki/
+
+    openssl x509 -pubkey -in /var/lib/rancher/rke2/server/tls/server-ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //' | tr -d '\n' > $CLUSTER_DIR/ca.cert
+
+    sed -i -e "s/127.0.0.1/${CONTROL_PLANE_ENDPOINT_HOST}/g" -e "s/default/k8s-${HOSTNAME}-admin@${NODEGROUP_NAME}/g" $CLUSTER_DIR/config
+
+    rm -rf $CLUSTER_DIR/kubernetes/pki/temporary-certs
+
+    export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+
+    echo -n "Wait node ${HOSTNAME} to be ready"
+
+    while [ -z "$(kubectl get no ${HOSTNAME} 2>/dev/null | grep -v NAME)" ];
+    do
+        echo -n "."
+        sleep 1
+    done
+
+    echo
+
+elif [ ${KUBE_DISTRIBUTION} == "k3s" ]; then
     ANNOTE_MASTER=true
     CERT_SANS="${LOAD_BALANCER_IP},${CONTROL_PLANE_ENDPOINT_HOST},${CONTROL_PLANE_ENDPOINT_HOST%%.*}"
 
@@ -204,7 +281,7 @@ if [ ${USE_K3S} == "true" ]; then
     done
 
     echo "K3S_MODE=server" > /etc/default/k3s
-    echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --node-name=${HOSTNAME} --advertise-address=${APISERVER_ADVERTISE_ADDRESS} --advertise-port=${APISERVER_ADVERTISE_PORT} --tls-san=${CERT_SANS}'" > /etc/systemd/system/k3s.service.env
+    echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --kubelet-arg=max-pods=${MAX_PODS} --node-name=${HOSTNAME} --advertise-address=${APISERVER_ADVERTISE_ADDRESS} --advertise-port=${APISERVER_ADVERTISE_PORT} --tls-san=${CERT_SANS}'" > /etc/systemd/system/k3s.service.env
     echo "K3S_DISABLE_ARGS='--disable-cloud-controller --disable=servicelb --disable=traefik --disable=metrics-server'" > /etc/systemd/system/k3s.disabled.env
 
     if [ "$HA_CLUSTER" = "true" ]; then
@@ -516,7 +593,7 @@ kubectl annotate node ${HOSTNAME} \
 
 if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
   kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
-elif [ "${USE_K3S}" == "true" ]; then
+elif [ "${KUBE_DISTRIBUTION}" == "k3s" ] || [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
   kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule node-role.kubernetes.io/control-plane:NoSchedule
 fi
 

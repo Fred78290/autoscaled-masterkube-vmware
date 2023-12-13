@@ -18,10 +18,10 @@ TOKEN=$(cat ./cluster/token)
 VMUUID=
 CSI_REGION=home
 CSI_ZONE=office
-USE_K3S=false
+KUBE_DISTRIBUTION=kubeadm
 ETCD_ENDPOINT=
 
-TEMP=$(getopt -o i:g:c:n: --long etcd-endpoint:,use-k3s:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+TEMP=$(getopt -o i:g:c:n: --long etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -81,8 +81,16 @@ while true; do
         CSI_ZONE=$2
         shift 2
         ;;
-    --use-k3s)
-        USE_K3S=$2
+    --k8s-distribution)
+        case "$2" in
+            kubeadm|k3s|rke2)
+                KUBE_DISTRIBUTION=$2
+                ;;
+            *)
+                echo "Unsupported kubernetes distribution: $2"
+                exit 1
+                ;;
+        esac
         shift 2
         ;;
     --)
@@ -117,9 +125,41 @@ cp cluster/config /etc/kubernetes/admin.conf
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
-if [ ${USE_K3S} == "true" ]; then
+if [ ${KUBE_DISTRIBUTION} == "rke2" ]; then
     ANNOTE_MASTER=true
-    echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --node-name=${HOSTNAME} --server=https://${MASTER_IP} --token=${TOKEN}'" > /etc/systemd/system/k3s.service.env
+    echo "RKE2_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --kubelet-arg=max-pods=${MAX_PODS} --node-name=${HOSTNAME} --server=https://${MASTER_IP} --token=${TOKEN}'" > /etc/systemd/system/rke2.env
+
+    if [ "$HA_CLUSTER" = "true" ]; then
+        echo "RKE2_DISABLE_ARGS='--disable-cloud-controller --disable=rke2-ingress-nginx --disable=rke2-metrics-server'" > /etc/systemd/system/rke2.disabled.env
+
+        if [ "${EXTERNAL_ETCD}" == "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
+            echo "RKE2_SERVER_ARGS='--datastore-endpoint=${ETCD_ENDPOINT} --datastore-cafile /etc/etcd/ssl/ca.pem --datastore-certfile /etc/etcd/ssl/etcd.pem --datastore-keyfile /etc/etcd/ssl/etcd-key.pem'" > /etc/systemd/system/k3s.server.env
+        fi
+
+        echo -n "Start rke2-server service"
+
+        systemctl enable rke2-server.service
+        systemctl start rke2-server.service
+    else
+        echo -n "Start rke2-agent service"
+
+        systemctl enable rke2-agent.service
+        systemctl start rke2-agent.service
+    fi
+
+    echo -n "Wait node ${HOSTNAME} to be ready"
+
+    while [ -z "$(kubectl get no ${HOSTNAME} 2>/dev/null | grep -v NAME)" ];
+    do
+        echo -n "."
+        sleep 1
+    done
+
+    echo
+
+elif [ ${KUBE_DISTRIBUTION} == "k3s" ]; then
+    ANNOTE_MASTER=true
+    echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --kubelet-arg=max-pods=${MAX_PODS} --node-name=${HOSTNAME} --server=https://${MASTER_IP} --token=${TOKEN}'" > /etc/systemd/system/k3s.service.env
 
     if [ "$HA_CLUSTER" = "true" ]; then
         echo "K3S_MODE=server" > /etc/default/k3s
@@ -188,7 +228,7 @@ else
     fi
 fi
 
-if [ "${USE_K3S}" = "false" ]; then
+if [ "${KUBE_DISTRIBUTION}" == "kubeadm" ]; then
     cat > patch.yaml <<EOF
 spec:
     providerID: 'vsphere://${VMUUID}'
@@ -209,7 +249,7 @@ if [ "$HA_CLUSTER" = "true" ]; then
 
     if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
         kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
-    elif [ "${USE_K3S}" == "true" ]; then
+    elif [ "${KUBE_DISTRIBUTION}" == "k3s" ] || [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
         kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule node-role.kubernetes.io/control-plane:NoSchedule
     fi
 else
