@@ -1292,7 +1292,7 @@ do
         echo_title "Already prepared VM ${MASTERKUBE_NODE}"
     else
         IPADDR="${IPADDRS[${INDEX}]}"
-        VMUUID=$(govc vm.info -json ${MASTERKUBE_NODE} | jq -r '.VirtualMachines[0].Config.Uuid//""')
+        VMUUID=$(govc vm.info -json ${MASTERKUBE_NODE} | jq -r '.virtualMachines[0].config.uuid//""')
 
         echo_title "Prepare VM ${MASTERKUBE_NODE}, UUID=${VMUUID} with IP:${IPADDR}"
 
