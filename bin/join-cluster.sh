@@ -149,6 +149,7 @@ EOF
         RKE2_SERVICE=rke2-server
     
         echo "disable-cloud-controller: true" >> /etc/rancher/rke2/config.yaml
+        echo "cloud-provider-name: external" >> /etc/rancher/rke2/config.yaml
         echo "disable:" >> /etc/rancher/rke2/config.yaml
         echo "  - servicelb" >> /etc/rancher/rke2/config.yaml
         echo "  - rke2-ingress-nginx" >> /etc/rancher/rke2/config.yaml
@@ -268,8 +269,8 @@ if [ "$HA_CLUSTER" = "true" ]; then
         --overwrite
 
     if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
-        kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
-    elif [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
+        kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule- node-role.kubernetes.io/control-plane:NoSchedule-
+    elif [ "${KUBERNETES_DISTRO}" == "k3s" ]; then
         kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule node-role.kubernetes.io/control-plane:NoSchedule
     fi
 else

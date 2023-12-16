@@ -238,6 +238,7 @@ kubelet-arg:
 node-name: ${HOSTNAME}
 advertise-address: ${APISERVER_ADVERTISE_ADDRESS}
 disable-cloud-controller: true
+cloud-provider-name: external
 disable:
   - rke2-ingress-nginx
   - rke2-metrics-server
@@ -607,9 +608,9 @@ kubectl annotate node ${HOSTNAME} \
     --overwrite
 
 if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
-  kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
-elif [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
-  kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule node-role.kubernetes.io/control-plane:NoSchedule
+    kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule- node-role.kubernetes.io/control-plane:NoSchedule-
+elif [ "${KUBERNETES_DISTRO}" == "k3s" ]; then
+    kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule node-role.kubernetes.io/control-plane:NoSchedule
 fi
 
 sed -i -e "/${CONTROL_PLANE_ENDPOINT%%.}/d" /etc/hosts
