@@ -1,4 +1,4 @@
-SSH_OPTIONS="-q -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+SSH_OPTIONS="-o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 SCP_OPTIONS="${SSH_OPTIONS} -p -r"
 OSDISTRO=$(uname -s)
 

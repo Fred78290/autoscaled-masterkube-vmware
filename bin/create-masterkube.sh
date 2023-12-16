@@ -297,7 +297,7 @@ while true; do
         shift
         ;;
     -v|--verbose)
-        SILENT=
+        VERBOSE=YES
         shift 1
         ;;
     --no-dhcp-autoscaled-node)
@@ -663,7 +663,13 @@ if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; 
     fi
 fi
 
-if [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
+if [ "${VERBOSE}" == "YES" ]; then
+    SILENT=
+else
+    SSH_OPTIONS="${SSH_OPTIONS} -q"
+    SCP_OPTIONS="${SCP_OPTIONS} -q"
+fi
+
 if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     TARGET_IMAGE="${ROOT_IMG_NAME}-rke2-${KUBERNETES_VERSION}-${SEED_ARCH}"
 elif [ "${KUBERNETES_DISTRO}" == "k3s" ]; then
