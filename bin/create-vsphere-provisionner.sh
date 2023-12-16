@@ -21,8 +21,8 @@ if [ -z "$(govc role.ls CNS-DATASTORE | grep 'Datastore.FileManagement')" ]; the
 
     for ROLEDEF in $ROLES
     do
-        IFS=: read ROLE PERMS <<<$ROLEDEF
-        IFS=, read -a PERMS <<<$PERMS
+        IFS=: read ROLE PERMISSIONS <<<"$ROLEDEF"
+        IFS=, read -a PERMS <<<"$PERMISSIONS"
 
         govc role.ls $ROLE > /dev/null 2>&1 && govc role.update $ROLE ${PERMS[@]} || govc role.create $ROLE ${PERMS[@]}
     done
