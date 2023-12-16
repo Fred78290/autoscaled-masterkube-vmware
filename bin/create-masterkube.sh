@@ -20,6 +20,7 @@ export MASTERKUBE="${NODEGROUP_NAME}-masterkube"
 export DASHBOARD_HOSTNAME=masterkube-vmware-dashboard
 export SSH_PRIVATE_KEY="${HOME}/.ssh/id_rsa"
 export SSH_PUBLIC_KEY="${SSH_PRIVATE_KEY}.pub"
+export KUBERNETES_DISTRO=kubeadm
 export KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
 export KUBERNETES_USER=kubernetes
 export KUBERNETES_PASSWORD=
@@ -33,7 +34,6 @@ export CNI_PLUGIN_VERSION="v1.2.0"
 export USE_ZEROSSL=YES
 export USE_KEEPALIVED=NO
 export HA_CLUSTER=false
-export KUBE_DISTRIBUTION=kubeadm
 export FIRSTNODE=0
 export CONTROLNODES=1
 export WORKERNODES=0
@@ -209,7 +209,7 @@ Options are:
 
 ### Design the kubernetes cluster
 
---k8s-distribution=<kubeadm|k3s|rke2>          # Which kubernetes distribution to use: kubeadm, k3s, rke2, default ${KUBE_DISTRIBUTION}
+--k8s-distribution=<kubeadm|k3s|rke2>          # Which kubernetes distribution to use: kubeadm, k3s, rke2, default ${KUBERNETES_DISTRO}
 --ha-cluster | -c                              # Allow to create an HA cluster, default ${HA_CLUSTER}
 --worker-nodes=<value>                         # Specify the number of worker node created in HA cluster, default ${WORKERNODES}
 --container-runtime=<docker|containerd|cri-o>  # Specify which OCI runtime to use, default ${CONTAINER_ENGINE}
@@ -410,7 +410,7 @@ while true; do
     --k8s-distribution)
         case "$2" in
             kubeadm|k3s|rke2)
-                KUBE_DISTRIBUTION=$2
+                KUBERNETES_DISTRO=$2
                 ;;
             *)
                 echo "Unsupported kubernetes distribution: $2"
@@ -643,10 +643,10 @@ if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externalgrpc" ];
     exit
 fi
 
-if [ "${KUBE_DISTRIBUTION}" == "k3s" ] || [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
+if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
 
-    if [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
+    if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
         RANCHER_CHANNEL=$(curl -s https://update.rke2.io/v1-release/channels)
     else
         RANCHER_CHANNEL=$(curl -s https://update.k3s.io/v1-release/channels)
@@ -657,15 +657,16 @@ if [ "${KUBE_DISTRIBUTION}" == "k3s" ] || [ "${KUBE_DISTRIBUTION}" == "rke2" ]; 
 
     if [ -z "${KUBERNETES_VERSION}" ]; then
         KUBERNETES_VERSION=$(echo -n "${RANCHER_CHANNEL}" | jq -r '.data[]|select(.id == "latest")|.latest//""')
-        echo_red_bold "${KUBE_DISTRIBUTION} ${WANTED_KUBERNETES_VERSION} not available, use latest ${KUBERNETES_VERSION}"
+        echo_red_bold "${KUBERNETES_DISTRO} ${WANTED_KUBERNETES_VERSION} not available, use latest ${KUBERNETES_VERSION}"
     else
-        echo_blue_bold "${KUBE_DISTRIBUTION} ${WANTED_KUBERNETES_VERSION} found, use ${KUBE_DISTRIBUTION} ${KUBERNETES_VERSION}"
+        echo_blue_bold "${KUBERNETES_DISTRO} ${WANTED_KUBERNETES_VERSION} found, use ${KUBERNETES_DISTRO} ${KUBERNETES_VERSION}"
     fi
 fi
 
 if [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
+if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     TARGET_IMAGE="${ROOT_IMG_NAME}-rke2-${KUBERNETES_VERSION}-${SEED_ARCH}"
-elif [ "${KUBE_DISTRIBUTION}" == "k3s" ]; then
+elif [ "${KUBERNETES_DISTRO}" == "k3s" ]; then
     TARGET_IMAGE="${ROOT_IMG_NAME}-k3s-${KUBERNETES_VERSION}-${SEED_ARCH}"
 else
     TARGET_IMAGE="${ROOT_IMG_NAME}-cni-${CNI_PLUGIN}-${KUBERNETES_VERSION}-${CONTAINER_ENGINE}-${SEED_ARCH}"
@@ -781,7 +782,7 @@ if [ -z "$(govc vm.info ${TARGET_IMAGE} 2>&1)" ]; then
     echo_title "Create vmware preconfigured image ${TARGET_IMAGE}"
 
     ./bin/create-image.sh \
-        --k8s-distribution=${KUBE_DISTRIBUTION} \
+        --k8s-distribution=${KUBERNETES_DISTRO} \
         --aws-access-key=${AWS_ACCESSKEY} \
         --aws-secret-key=${AWS_SECRETKEY} \
         --password="${KUBERNETES_PASSWORD}" \
@@ -901,7 +902,7 @@ export TRANSPORT=${TRANSPORT}
 export UNREMOVABLENODERECHECKTIMEOUT=${UNREMOVABLENODERECHECKTIMEOUT}
 export USE_DHCP_ROUTES_PRIVATE=${USE_DHCP_ROUTES_PRIVATE}
 export USE_DHCP_ROUTES_PUBLIC=${USE_DHCP_ROUTES_PUBLIC}
-export KUBE_DISTRIBUTION=${KUBE_DISTRIBUTION}
+export KUBERNETES_DISTRO=${KUBERNETES_DISTRO}
 export USE_KEEPALIVED=${USE_KEEPALIVED}
 export USE_ZEROSSL=${USE_ZEROSSL}
 export VC_NETWORK_PRIVATE=${VC_NETWORK_PRIVATE}
@@ -1304,7 +1305,7 @@ do
                 echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} single instance master node, kubernetes version=${KUBERNETES_VERSION}"
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
-                    --k8s-distribution=${KUBE_DISTRIBUTION} \
+                    --k8s-distribution=${KUBERNETES_DISTRO} \
                     --vm-uuid=${VMUUID} \
                     --csi-region=${GOVC_REGION} \
                     --csi-zone=${GOVC_ZONE} \
@@ -1333,7 +1334,7 @@ do
                 echo_blue_bold "Start kubernetes ${MASTERKUBE_NODE} instance master node number ${INDEX}, kubernetes version=${KUBERNETES_VERSION}"
 
                 ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
-                    --k8s-distribution=${KUBE_DISTRIBUTION} \
+                    --k8s-distribution=${KUBERNETES_DISTRO} \
                     --vm-uuid=${VMUUID} \
                     --csi-region=${GOVC_REGION} \
                     --csi-zone=${GOVC_ZONE} \
@@ -1371,7 +1372,8 @@ do
                     eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster ${SILENT}
 
                     eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
-                        --k8s-distribution=${KUBE_DISTRIBUTION} \
+                        --k8s-distribution=${KUBERNETES_DISTRO} \
+                        --max-pods=${MAX_PODS} \
                         --vm-uuid=${VMUUID} \
                         --csi-region=${GOVC_REGION} \
                         --csi-zone=${GOVC_ZONE} \
@@ -1388,7 +1390,8 @@ do
                 eval scp ${SCP_OPTIONS} ${TARGET_CLUSTER_LOCATION}/* ${KUBERNETES_USER}@${IPADDR}:~/cluster ${SILENT}
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
-                    --k8s-distribution=${KUBE_DISTRIBUTION} \
+                    --k8s-distribution=${KUBERNETES_DISTRO} \
+                    --max-pods=${MAX_PODS} \
                     --vm-uuid=${VMUUID} \
                     --csi-region=${GOVC_REGION} \
                     --csi-zone=${GOVC_ZONE} \
@@ -1437,12 +1440,18 @@ else
     echo "address: ${CONNECTTO}" > ${TARGET_CONFIG_LOCATION}/${CLOUDPROVIDER_CONFIG}
 fi
 
+if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
+    KUBEADM_ADDRESS="${MASTER_IP%%:*}:9345"
+else
+    KUBEADM_ADDRESS="${MASTER_IP}"
+fi
+
 AUTOSCALER_CONFIG=$(cat <<EOF
 {
     "use-external-etcd": ${EXTERNAL_ETCD},
     "src-etcd-ssl-dir": "/etc/etcd/ssl",
     "dst-etcd-ssl-dir": "${ETCD_DST_DIR}",
-    "distribution": ${KUBE_DISTRIBUTION},
+    "distribution": "${KUBERNETES_DISTRO}",
     "kubernetes-pki-srcdir": "/etc/kubernetes/pki",
     "kubernetes-pki-dstdir": "/etc/kubernetes/pki",
     "network": "${TRANSPORT}",
@@ -1450,7 +1459,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
     "secret": "${SCHEME}",
     "minNode": ${MINNODES},
     "maxNode": ${MAXNODES},
-    "maxPods": ${MAX_PODS}
+    "maxPods": ${MAX_PODS},
     "maxNode-per-cycle": 2,
     "node-name-prefix": "autoscaled",
     "managed-name-prefix": "managed",
@@ -1467,7 +1476,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
         "deleteNodeGroup": false
     },
     "kubeadm": {
-        "address": "${MASTER_IP}",
+        "address": "${KUBEADM_ADDRESS}",
         "token": "${TOKEN}",
         "ca": "sha256:${CACERT}",
         "extras-args": [

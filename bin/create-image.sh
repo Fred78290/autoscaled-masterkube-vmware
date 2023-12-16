@@ -32,7 +32,7 @@ SECOND_NETWORK_NAME=
 SEED_ARCH=$([ "$(uname -m)" == "aarch64" ] && echo -n arm64 || echo -n amd64)
 CONTAINER_ENGINE=docker
 CONTAINER_CTL=docker
-KUBE_DISTRIBUTION=kubedm
+KUBERNETES_DISTRO=kubedm
 
 source $CURDIR/common.sh
 
@@ -68,7 +68,7 @@ while true ; do
         --k8s-distribution) 
             case "$2" in
                 kubeadm|k3s|rke2)
-                KUBE_DISTRIBUTION=$2
+                KUBERNETES_DISTRO=$2
                 ;;
             *)
                 echo "Unsupported kubernetes distribution: $2"
@@ -246,7 +246,7 @@ else
     echo_blue_bold "${SEEDIMAGE} already exists, nothing to do!"
 fi
 
-case "${KUBE_DISTRIBUTION}" in
+case "${KUBERNETES_DISTRO}" in
     k3s|rke2)
         CREDENTIALS_CONFIG=/var/lib/rancher/credentialprovider/config.yaml
         CREDENTIALS_BIN=/var/lib/rancher/credentialprovider/bin
@@ -304,7 +304,7 @@ KUBERNETES_MINOR_RELEASE=${KUBERNETES_MINOR_RELEASE}
 CRIO_VERSION=${CRIO_VERSION}
 CONTAINER_ENGINE=${CONTAINER_ENGINE}
 CONTAINER_CTL=${CONTAINER_CTL}
-KUBE_DISTRIBUTION=${KUBE_DISTRIBUTION}
+KUBERNETES_DISTRO=${KUBERNETES_DISTRO}
 CREDENTIALS_CONFIG=$CREDENTIALS_CONFIG
 CREDENTIALS_BIN=$CREDENTIALS_BIN
 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
@@ -407,48 +407,32 @@ SHELL
 fi
 EOF
 
-if [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
+if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     echo "prepare rke2 image"
 
     cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
     curl -sfL https://get.rke2.io | INSTALL_RKE2_CHANNEL="${KUBERNETES_VERSION}" sh -
 
-    mkdir -p /etc/systemd/system/rke2-server.service.d
-    mkdir -p /etc/systemd/system/rke2-agent.service.d
+    pushd /usr/local/bin
+    curl -sL --remote-name-all https://storage.googleapis.com/kubernetes-release/release/${KUBERNETES_VERSION%%+*}/bin/linux/${SEED_ARCH}/{kubectl,kube-proxy}
+    chmod +x /usr/local/bin/kube*
+    popd
 
-    echo "RKE2_ARGS=" > /etc/systemd/system/rke2.env
-    echo "RKE2_SERVER_ARGS=" > /etc/systemd/system/rke2-server.env
-    echo "RKE2_AGENT_ARGS=" > /etc/systemd/system/rke2-agent.env
-    echo "RKE2_DISABLE_ARGS=" > /etc/systemd/system/rke2.disabled.env
+    mkdir -p /etc/rancher/rke2
+    mkdir -p /etc/NetworkManager/conf.d
 
-    cat > /etc/systemd/system/rke2-server.service.d/10-rke2.conf <<"SHELL"
-[Service]
-Environment="KUBELET_ARGS=--kubelet-arg=cloud-provider=external --kubelet-arg=fail-swap-on=false"
-EnvironmentFile=-/etc/default/%N
-EnvironmentFile=-/etc/sysconfig/%N
-EnvironmentFile=-/etc/systemd/system/%N.env
-EnvironmentFile=-/etc/systemd/system/rke2.env
-EnvironmentFile=-/etc/systemd/system/rke2.disabled.env
-ExecStart=
-ExecStart=/usr/local/bin/rke2 server $RKE2_ARGS $RKE2_SERVER_ARGS $RKE2_DISABLE_ARGS $KUBELET_ARGS \
-
+    cat > /etc/NetworkManager/conf.d/rke2-canal.conf <<"SHELL"
+[keyfile]
+unmanaged-devices=interface-name:cali*;interface-name:flannel*
 SHELL
-
-    cat > /etc/systemd/system/rke2-agent.service.d/10-rke2.conf <<"SHELL"
-[Service]
-Environment="KUBELET_ARGS=--kubelet-arg=cloud-provider=external --kubelet-arg=fail-swap-on=false"
-EnvironmentFile=-/etc/default/%N
-EnvironmentFile=-/etc/sysconfig/%N
-EnvironmentFile=-/etc/systemd/system/%N.env
-EnvironmentFile=-/etc/systemd/system/rke2.env
-EnvironmentFile=-/etc/systemd/system/rke2.disabled.env
-ExecStart=
-ExecStart=/usr/local/bin/rke2 agent $RKE2_ARGS $RKE2_AGENT_ARGS $RKE2_DISABLE_ARGS $KUBELET_ARGS \
-
+    cat > /etc/rancher/rke2/config.yaml <<"SHELL"
+kubelet-arg:
+  - cloud-provider=external
+  - fail-swap-on=false
 SHELL
 EOF
 
-elif [ "${KUBE_DISTRIBUTION}" == "k3s" ]; then
+elif [ "${KUBERNETES_DISTRO}" == "k3s" ]; then
     echo "prepare k3s image"
 
     cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
@@ -763,7 +747,7 @@ do
 done
 echo
 
-sleep 5
+sleep 10
 
 echo_blue_bold "Created image ${TARGET_IMAGE} with kubernetes version ${KUBERNETES_VERSION}"
 

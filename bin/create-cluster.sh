@@ -30,7 +30,7 @@ K8_OPTIONS="--ignore-preflight-errors=All --config=${KUBEADM_CONFIG}"
 VMUUID=
 CSI_REGION=home
 CSI_ZONE=office
-KUBE_DISTRIBUTION=kubeadm
+KUBERNETES_DISTRO=kubeadm
 ETCD_ENDPOINT=
 
 if [ "$(uname -p)" == "aarch64" ]; then
@@ -69,7 +69,7 @@ while true; do
     --k8s-distribution)
         case "$2" in
             kubeadm|k3s|rke2)
-                KUBE_DISTRIBUTION=$2
+                KUBERNETES_DISTRO=$2
                 ;;
             *)
                 echo "Unsupported kubernetes distribution: $2"
@@ -180,8 +180,6 @@ fi
 mkdir -p /etc/kubernetes
 mkdir -p $CLUSTER_DIR/etcd
 
-echo -n "$LOAD_BALANCER_IP:6443" > $CLUSTER_DIR/manager-ip
-
 #sed -i "2i${APISERVER_ADVERTISE_ADDRESS} $(hostname) ${CONTROL_PLANE_ENDPOINT_HOST}" /etc/hosts
 echo "${APISERVER_ADVERTISE_ADDRESS} $(hostname) ${CONTROL_PLANE_ENDPOINT_HOST}" >> /etc/hosts
 
@@ -194,31 +192,73 @@ if [ "$HA_CLUSTER" = "true" ]; then
     done
 fi
 
-if [ ${KUBE_DISTRIBUTION} == "rke2" ]; then
-    ANNOTE_MASTER=true
-    CERT_SANS="${LOAD_BALANCER_IP},${CONTROL_PLANE_ENDPOINT_HOST},${CONTROL_PLANE_ENDPOINT_HOST%%.*}"
+function collect_cert_sans() {
+    local TLS_SNA=(
+        "${LOAD_BALANCER_IP}"
+        "${CONTROL_PLANE_ENDPOINT_HOST}"
+        "${CONTROL_PLANE_ENDPOINT_HOST%%.*}"
+    )
 
     for CERT_EXTRA in ${CERT_EXTRA_SANS[*]} 
     do
-        CERT_SANS="${CERT_SANS},${CERT_EXTRA}"
+        if [[ ! ${TLS_SNA[*]} =~ "${CERT_EXTRA}" ]]; then
+            TLS_SNA+=("${CERT_EXTRA}")
+        fi
     done
 
     for CLUSTER_NODE in ${CLUSTER_NODES[*]}
     do
         IFS=: read HOST IP <<< $CLUSTER_NODE
-        [ -n ${IP} ] && CERT_SANS="${CERT_SANS},${IP}"
-        [ -n ${HOST} ] && CERT_SANS="${CERT_SANS},${HOST}"
-        [ -n ${HOST} ] && CERT_SANS="${CERT_SANS},${HOST%%.*}"
+        if [ -n ${IP} ] && [[ ! ${TLS_SNA[*]} =~ "${IP}" ]]; then
+            TLS_SNA+=("${CERT_EXTRA}")
+        fi
+
+        if [ -n ${HOST} ]; then
+            [[ ! ${TLS_SNA[*]} =~ "${HOST}" ]] && TLS_SNA+=("${HOST}")
+            HOST="${HOST%%.*}"
+            [[ ! ${TLS_SNA[*]} =~ "${HOST}" ]] && TLS_SNA+=("${HOST}")
+        fi
     done
 
-    echo "RKE2_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --kubelet-arg=max-pods=${MAX_PODS} --node-name=${HOSTNAME} --advertise-address=${APISERVER_ADVERTISE_ADDRESS} --advertise-port=${APISERVER_ADVERTISE_PORT} --tls-san=${CERT_SANS}'" > /etc/systemd/system/rke2.env
-    echo "RKE2_DISABLE_ARGS='--disable-cloud-controller --disable=rke2-ingress-nginx --disable=rke2-metrics-server'" > /etc/systemd/system/rke2.disabled.env
+    echo -n "${TLS_SNA[*]}" | tr ' ' ','
+}
+
+CERT_SANS="$(collect_cert_sans)"
+
+if [ ${KUBERNETES_DISTRO} == "rke2" ]; then
+    ANNOTE_MASTER=true
+    IFS=',' read -ra CERT_SANS <<<"${CERT_SANS}"
+
+    cat > /etc/rancher/rke2/config.yaml <<EOF
+kubelet-arg:
+  - cloud-provider=external
+  - fail-swap-on=false
+  - provider-id=vsphere://${VMUUID}
+  - max-pods=${MAX_PODS}
+node-name: ${HOSTNAME}
+advertise-address: ${APISERVER_ADVERTISE_ADDRESS}
+disable-cloud-controller: true
+disable:
+  - rke2-ingress-nginx
+  - rke2-metrics-server
+  - servicelb
+tls-san:
+EOF
+
+    for CERT_SAN in ${CERT_SANS[*]} 
+    do
+        echo "  - ${CERT_SAN}" >> /etc/rancher/rke2/config.yaml
+    done
 
     if [ "$HA_CLUSTER" = "true" ]; then
         if [ "${EXTERNAL_ETCD}" == "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
-            echo "RKE2_SERVER_ARGS='--disable-etcd --datastore-endpoint=${ETCD_ENDPOINT} --datastore-cafile /etc/etcd/ssl/ca.pem --datastore-certfile /etc/etcd/ssl/etcd.pem --datastore-keyfile /etc/etcd/ssl/etcd-key.pem'" > /etc/systemd/system/rke2-server.env
+            echo "disable-etcd: true" >> /etc/rancher/rke2/config.yaml
+            echo "datastore-endpoint: ${ETCD_ENDPOINT}" >> /etc/rancher/rke2/config.yaml
+            echo "datastore-cafile: /etc/etcd/ssl/ca.pem" >> /etc/rancher/rke2/config.yaml
+            echo "datastore-certfile: /etc/etcd/ssl/etcd.pem" >> /etc/rancher/rke2/config.yaml
+            echo "datastore-keyfile: /etc/etcd/ssl/etcd-key.pem" >> /etc/rancher/rke2/config.yaml
         else
-            echo "RKE2_SERVER_ARGS=--cluster-init" > /etc/systemd/system/rke2-server.env
+            echo "cluster-init: true" >> /etc/rancher/rke2/config.yaml
         fi
     fi
 
@@ -263,22 +303,8 @@ if [ ${KUBE_DISTRIBUTION} == "rke2" ]; then
 
     echo
 
-elif [ ${KUBE_DISTRIBUTION} == "k3s" ]; then
+elif [ ${KUBERNETES_DISTRO} == "k3s" ]; then
     ANNOTE_MASTER=true
-    CERT_SANS="${LOAD_BALANCER_IP},${CONTROL_PLANE_ENDPOINT_HOST},${CONTROL_PLANE_ENDPOINT_HOST%%.*}"
-
-    for CERT_EXTRA in ${CERT_EXTRA_SANS[*]} 
-    do
-        CERT_SANS="${CERT_SANS},${CERT_EXTRA}"
-    done
-
-    for CLUSTER_NODE in ${CLUSTER_NODES[*]}
-    do
-        IFS=: read HOST IP <<< $CLUSTER_NODE
-        [ -n ${IP} ] && CERT_SANS="${CERT_SANS},${IP}"
-        [ -n ${HOST} ] && CERT_SANS="${CERT_SANS},${HOST}"
-        [ -n ${HOST} ] && CERT_SANS="${CERT_SANS},${HOST%%.*}"
-    done
 
     echo "K3S_MODE=server" > /etc/default/k3s
     echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --kubelet-arg=max-pods=${MAX_PODS} --node-name=${HOSTNAME} --advertise-address=${APISERVER_ADVERTISE_ADDRESS} --advertise-port=${APISERVER_ADVERTISE_PORT} --tls-san=${CERT_SANS}'" > /etc/systemd/system/k3s.service.env
@@ -447,22 +473,11 @@ apiServer:
     authorization-mode: Node,RBAC
   timeoutForControlPlane: 4m0s
   certSANs:
-  - ${LOAD_BALANCER_IP}
-  - ${CONTROL_PLANE_ENDPOINT_HOST}
-  - ${CONTROL_PLANE_ENDPOINT_HOST%%.*}
 EOF
 
-    for CERT_EXTRA in ${CERT_EXTRA_SANS[*]} 
+    for CERT_SAN in ${CERT_SANS[*]} 
     do
-        echo "  - $CERT_EXTRA" >> ${KUBEADM_CONFIG}
-    done
-
-    for CLUSTER_NODE in ${CLUSTER_NODES[*]}
-    do
-        IFS=: read HOST IP <<< $CLUSTER_NODE
-        [ -z ${IP} ] || echo "  - ${IP}" >> ${KUBEADM_CONFIG}
-        [ -z ${HOST} ] || echo "  - ${HOST}" >> ${KUBEADM_CONFIG}
-        [ -z ${HOST} ] || echo "  - ${HOST%%.*}" >> ${KUBEADM_CONFIG}
+        echo "  - $CERT_SAN" >> ${KUBEADM_CONFIG}
     done
 
     # External ETCD
@@ -593,10 +608,12 @@ kubectl annotate node ${HOSTNAME} \
 
 if [ "${MASTER_NODE_ALLOW_DEPLOYMENT}" = "YES" ];then
   kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule-
-elif [ "${KUBE_DISTRIBUTION}" == "k3s" ] || [ "${KUBE_DISTRIBUTION}" == "rke2" ]; then
+elif [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
   kubectl taint node ${HOSTNAME} node-role.kubernetes.io/master:NoSchedule node-role.kubernetes.io/control-plane:NoSchedule
 fi
 
 sed -i -e "/${CONTROL_PLANE_ENDPOINT%%.}/d" /etc/hosts
+
+echo -n "${LOAD_BALANCER_IP}:${APISERVER_ADVERTISE_PORT}" > $CLUSTER_DIR/manager-ip
 
 echo "Done k8s master node"
