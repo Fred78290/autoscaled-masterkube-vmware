@@ -13,6 +13,9 @@ if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; 
   ANNOTE_MASTER=true
 fi
 
+IFS=. read VERSION MAJOR MINOR <<<"${KUBERNETES_VERSION%%+*}"
+VSPHERE_CLOUD_RELEASE="${VERSION}.${MAJOR}.0"
+
 if [ -z "$(govc role.ls CNS-DATASTORE | grep 'Datastore.FileManagement')" ]; then
     ROLES="CNS-DATASTORE:Datastore.FileManagement,System.Anonymous,System.Read,System.View
     CNS-HOST-CONFIG-STORAGE:Host.Config.Storage,System.Anonymous,System.Read,System.View
@@ -143,7 +146,7 @@ stringData:
 EOF
 
 sed -e "s/__REPLICAS__/$REPLICAS/g" -e "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-csi-driver.yaml > ${ETC_DIR}/vsphere-csi-driver.yaml
-sed "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-cloud-controller-manager-ds.yaml > ${ETC_DIR}/vsphere-cloud-controller-manager-ds.yaml
+sed -e "s/__VSPHERE_CLOUD_RELEASE__/${VSPHERE_CLOUD_RELEASE}/g" -e "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-cloud-controller-manager-ds.yaml > ${ETC_DIR}/vsphere-cloud-controller-manager-ds.yaml
 
 kubectl create ns vmware-system-csi --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
@@ -165,7 +168,7 @@ kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 
 kubectl create secret generic vsphere-config-secret -n vmware-system-csi --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
-    --from-file=${ETC_DIR}/csi-vsphere.conf | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
+  --from-file=${ETC_DIR}/csi-vsphere.conf | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f ${ETC_DIR}/vsphere-csi-driver.yaml
 
