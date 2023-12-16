@@ -31,7 +31,7 @@ fi
 read -a VCENTER <<<"$(echo $GOVC_URL | awk -F/ '{print $3}' | tr '@' ' ')"
 VCENTER=${VCENTER[${#VCENTER[@]} - 1]}
 
-DATASTORE_URL=$(govc datastore.info -json | jq -r .Datastores[0].Info.Url)
+DATASTORE_URL=$(govc datastore.info -json | jq -r .datastores[0].info.url)
 
 [ $HA_CLUSTER = "true" ] && REPLICAS=3 || REPLICAS=1
 
