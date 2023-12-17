@@ -155,7 +155,7 @@ export TRANSPORT=${TRANSPORT}
 export UNREMOVABLENODERECHECKTIMEOUT=${UNREMOVABLENODERECHECKTIMEOUT}
 export USE_DHCP_ROUTES_PRIVATE=${USE_DHCP_ROUTES_PRIVATE}
 export USE_DHCP_ROUTES_PUBLIC=${USE_DHCP_ROUTES_PUBLIC}
-export USE_K3S=${USE_K3S}
+export KUBERNETES_DISTRO=${KUBERNETES_DISTRO}
 export USE_KEEPALIVED=${USE_KEEPALIVED}
 export USE_ZEROSSL=${USE_ZEROSSL}
 export VC_NETWORK_PRIVATE=${VC_NETWORK_PRIVATE}
@@ -181,21 +181,21 @@ if [ "$LAUNCH_CA" == YES ]; then
 	kubectl delete po -l k8s-app=cluster-autoscaler -n kube-system --kubeconfig=${TARGET_CLUSTER_LOCATION}/config
 fi
 
-if [ ${USE_K3S} == true ]; then
+if [ ${KUBERNETES_DISTRO} == "k3s" ] || [ ${KUBERNETES_DISTRO} == "rke2" ]; then
 	mkdir -p ${TARGET_DEPLOY_LOCATION}/system-upgrade
 
 	IFS=+ read KUBEVERSION TAILK3S <<< "${KUBERNETES_VERSION}"
 
 	kubectl delete ns system-upgrade --kubeconfig=${TARGET_CLUSTER_LOCATION}/config &>/dev/null || true
 
-	sed -e "s/__KUBEVERSION__/${KUBEVERSION}/g" templates/system-upgrade/system-upgrade-controller.yaml \
+	sed -e "s/__KUBEVERSION__/${KUBEVERSION}/g" templates/system-upgrade/${KUBERNETES_DISTRO}/system-upgrade-controller.yaml \
 		| tee ${TARGET_DEPLOY_LOCATION}/system-upgrade/system-upgrade-controller.yaml \
 		| kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 	kubectl wait --kubeconfig=${TARGET_CLUSTER_LOCATION}/config --namespace system-upgrade --for=condition=ready pod \
 		--selector=upgrade.cattle.io/controller=system-upgrade-controller --timeout=240s
 
-	sed -e "s/__KUBERNETES_VERSION__/${KUBERNETES_VERSION}/g" templates/system-upgrade/system-upgrade-plan.yaml \
+	sed -e "s/__KUBERNETES_VERSION__/${KUBERNETES_VERSION}/g" templates/system-upgrade/${KUBERNETES_DISTRO}/system-upgrade-plan.yaml \
 		| tee ${TARGET_DEPLOY_LOCATION}/system-upgrade/system-upgrade-plan.yaml \
 		| kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 

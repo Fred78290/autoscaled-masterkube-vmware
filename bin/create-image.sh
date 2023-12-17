@@ -32,14 +32,14 @@ SECOND_NETWORK_NAME=
 SEED_ARCH=$([ "$(uname -m)" == "aarch64" ] && echo -n arm64 || echo -n amd64)
 CONTAINER_ENGINE=docker
 CONTAINER_CTL=docker
-USE_K3S=false
+KUBERNETES_DISTRO=kubedm
 
 source $CURDIR/common.sh
 
 mkdir -p $ISODIR
 mkdir -p $CACHE
 
-TEMP=`getopt -o d:a:i:k:n:op:s:u:v: --long use-k3s:,aws-access-key:,aws-secret-key:,distribution:,arch:,container-runtime:,user:,adapter:,primary-adapter:,primary-network:,second-adapter:,second-network:,ovftool,seed:,custom-image:,ssh-key:,cni-version:,password:,kubernetes-version: -n "$0" -- "$@"`
+TEMP=`getopt -o d:a:i:k:n:op:s:u:v: --long k8s-distribution:,aws-access-key:,aws-secret-key:,distribution:,arch:,container-runtime:,user:,adapter:,primary-adapter:,primary-network:,second-adapter:,second-network:,ovftool,seed:,custom-image:,ssh-key:,cni-version:,password:,kubernetes-version: -n "$0" -- "$@"`
 eval set -- "$TEMP"
 
 # extract options and their arguments into variables.
@@ -65,7 +65,18 @@ while true ; do
         --primary-network) PRIMARY_NETWORK_NAME=$2 ; shift 2;;
         --second-adapter) SECOND_NETWORK_ADAPTER=$2 ; shift 2;;
         --second-network) SECOND_NETWORK_NAME=$2 ; shift 2;;
-        --use-k3s) USE_K3S=$2 ; shift 2;;
+        --k8s-distribution) 
+            case "$2" in
+                kubeadm|k3s|rke2)
+                KUBERNETES_DISTRO=$2
+                ;;
+            *)
+                echo "Unsupported kubernetes distribution: $2"
+                exit 1
+                ;;
+            esac
+            shift 2
+            ;;
         --container-runtime)
             case "$2" in
                 "docker")
@@ -224,6 +235,8 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         done
         echo
 
+        sleep 5
+
         echo_blue_bold "${SEEDIMAGE} is ready"
     else
         echo_red_bold "Import failed!"
@@ -233,13 +246,16 @@ else
     echo_blue_bold "${SEEDIMAGE} already exists, nothing to do!"
 fi
 
-if [ "${USE_K3S}" == "true" ]; then
-    CREDENTIALS_CONFIG=/var/lib/rancher/credentialprovider/config.yaml
-    CREDENTIALS_BIN=/var/lib/rancher/credentialprovider/bin
-else
-    CREDENTIALS_CONFIG=/etc/kubernetes/credential.yaml
-    CREDENTIALS_BIN=/usr/local/bin
-fi
+case "${KUBERNETES_DISTRO}" in
+    k3s|rke2)
+        CREDENTIALS_CONFIG=/var/lib/rancher/credentialprovider/config.yaml
+        CREDENTIALS_BIN=/var/lib/rancher/credentialprovider/bin
+        ;;
+    kubeadm)
+        CREDENTIALS_CONFIG=/etc/kubernetes/credential.yaml
+        CREDENTIALS_BIN=/usr/local/bin
+        ;;
+esac
 
 KUBERNETES_MINOR_RELEASE=$(echo -n $KUBERNETES_VERSION | tr '.' ' ' | awk '{ print $2 }')
 CRIO_VERSION=$(echo -n $KUBERNETES_VERSION | tr -d 'v' | tr '.' ' ' | awk '{ print $1"."$2 }')
@@ -288,7 +304,7 @@ KUBERNETES_MINOR_RELEASE=${KUBERNETES_MINOR_RELEASE}
 CRIO_VERSION=${CRIO_VERSION}
 CONTAINER_ENGINE=${CONTAINER_ENGINE}
 CONTAINER_CTL=${CONTAINER_CTL}
-USE_K3S=${USE_K3S}
+KUBERNETES_DISTRO=${KUBERNETES_DISTRO}
 CREDENTIALS_CONFIG=$CREDENTIALS_CONFIG
 CREDENTIALS_BIN=$CREDENTIALS_BIN
 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
@@ -391,7 +407,34 @@ SHELL
 fi
 EOF
 
-if [ "${USE_K3S}" == "true" ]; then
+if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
+    echo "prepare rke2 image"
+
+    cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
+    curl -sfL https://get.rke2.io | INSTALL_RKE2_CHANNEL="${KUBERNETES_VERSION}" sh -
+
+    pushd /usr/local/bin
+    curl -sL --remote-name-all https://storage.googleapis.com/kubernetes-release/release/${KUBERNETES_VERSION%%+*}/bin/linux/${SEED_ARCH}/{kubectl,kube-proxy}
+    chmod +x /usr/local/bin/kube*
+    popd
+
+    mkdir -p /etc/rancher/rke2
+    mkdir -p /etc/NetworkManager/conf.d
+
+    cat > /etc/NetworkManager/conf.d/rke2-canal.conf <<"SHELL"
+[keyfile]
+unmanaged-devices=interface-name:cali*;interface-name:flannel*
+SHELL
+    cat > /etc/rancher/rke2/config.yaml <<"SHELL"
+kubelet-arg:
+  - cloud-provider=external
+  - fail-swap-on=false
+SHELL
+EOF
+
+elif [ "${KUBERNETES_DISTRO}" == "k3s" ]; then
+    echo "prepare k3s image"
+
     cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
     curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${KUBERNETES_VERSION}" INSTALL_K3S_SKIP_ENABLE=true sh -
 
@@ -418,6 +461,8 @@ SHELL
 EOF
 
 else
+    echo "prepare kubeadm image"
+
     cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
     function pull_image() {
         DOCKER_IMAGES=$(curl -s $1 | grep -E "\simage: " | sed -E 's/.+image: (.+)/\1/g')
@@ -701,6 +746,8 @@ do
     sleep 1
 done
 echo
+
+sleep 10
 
 echo_blue_bold "Created image ${TARGET_IMAGE} with kubernetes version ${KUBERNETES_VERSION}"
 

@@ -9,9 +9,12 @@ pushd $CURDIR/../ &>/dev/null
 export KUBERNETES_TEMPLATE=./templates/vsphere-storage
 export ETC_DIR=${TARGET_DEPLOY_LOCATION}/vsphere-storage
 
-if [ "${USE_K3S}" == "true" ]; then
+if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
   ANNOTE_MASTER=true
 fi
+
+IFS=. read VERSION MAJOR MINOR <<<"${KUBERNETES_VERSION%%+*}"
+VSPHERE_CLOUD_RELEASE="${VERSION}.${MAJOR}.0"
 
 if [ -z "$(govc role.ls CNS-DATASTORE | grep 'Datastore.FileManagement')" ]; then
     ROLES="CNS-DATASTORE:Datastore.FileManagement,System.Anonymous,System.Read,System.View
@@ -21,8 +24,8 @@ if [ -z "$(govc role.ls CNS-DATASTORE | grep 'Datastore.FileManagement')" ]; the
 
     for ROLEDEF in $ROLES
     do
-        IFS=: read ROLE PERMS <<<$ROLEDEF
-        IFS=, read -a PERMS <<<$PERMS
+        IFS=: read ROLE PERMISSIONS <<<"$ROLEDEF"
+        IFS=, read -a PERMS <<<"$PERMISSIONS"
 
         govc role.ls $ROLE > /dev/null 2>&1 && govc role.update $ROLE ${PERMS[@]} || govc role.create $ROLE ${PERMS[@]}
     done
@@ -31,7 +34,7 @@ fi
 read -a VCENTER <<<"$(echo $GOVC_URL | awk -F/ '{print $3}' | tr '@' ' ')"
 VCENTER=${VCENTER[${#VCENTER[@]} - 1]}
 
-DATASTORE_URL=$(govc datastore.info -json | jq -r .Datastores[0].Info.Url)
+DATASTORE_URL=$(govc datastore.info -json | jq -r .datastores[0].info.url)
 
 [ $HA_CLUSTER = "true" ] && REPLICAS=3 || REPLICAS=1
 
@@ -143,7 +146,7 @@ stringData:
 EOF
 
 sed -e "s/__REPLICAS__/$REPLICAS/g" -e "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-csi-driver.yaml > ${ETC_DIR}/vsphere-csi-driver.yaml
-sed "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-cloud-controller-manager-ds.yaml > ${ETC_DIR}/vsphere-cloud-controller-manager-ds.yaml
+sed -e "s/__VSPHERE_CLOUD_RELEASE__/${VSPHERE_CLOUD_RELEASE}/g" -e "s/__ANNOTE_MASTER__/${ANNOTE_MASTER}/g" ${KUBERNETES_TEMPLATE}/vsphere-cloud-controller-manager-ds.yaml > ${ETC_DIR}/vsphere-cloud-controller-manager-ds.yaml
 
 kubectl create ns vmware-system-csi --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
@@ -165,7 +168,7 @@ kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
 
 kubectl create secret generic vsphere-config-secret -n vmware-system-csi --dry-run=client -o yaml \
 	--kubeconfig=${TARGET_CLUSTER_LOCATION}/config \
-    --from-file=${ETC_DIR}/csi-vsphere.conf | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
+  --from-file=${ETC_DIR}/csi-vsphere.conf | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
 kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f ${ETC_DIR}/vsphere-csi-driver.yaml
 

@@ -8,15 +8,19 @@ NET_IP=0.0.0.0
 APISERVER_ADVERTISE_PORT=6443
 NGINX_CONF=/etc/nginx/tcpconf.d/apiserver.conf
 
-TEMP=$(getopt -o l:p:n: --long listen-ip:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+TEMP=$(getopt -o l:c:p:n: --long port:listen-ip:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
 # extract options and their arguments into variables.
 while true; do
     case "$1" in
-    -p | --control-plane-endpoint)
+    -c | --control-plane-endpoint)
         CONTROL_PLANE_ENDPOINT="$2"
+        shift 2
+        ;;
+    -p | --port)
+        APISERVER_ADVERTISE_PORT="$2"
         shift 2
         ;;
     -n | --cluster-nodes)
