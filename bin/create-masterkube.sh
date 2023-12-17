@@ -1447,9 +1447,9 @@ else
 fi
 
 if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
-    KUBEADM_ADDRESS="${MASTER_IP%%:*}:9345"
+    SERVER_ADDRESS="${MASTER_IP%%:*}:9345"
 else
-    KUBEADM_ADDRESS="${MASTER_IP}"
+    SERVER_ADDRESS="${MASTER_IP}"
 fi
 
 AUTOSCALER_CONFIG=$(cat <<EOF
@@ -1481,15 +1481,13 @@ AUTOSCALER_CONFIG=$(cat <<EOF
         "createNodeGroup": false,
         "deleteNodeGroup": false
     },
-    "kubeadm": {
-        "address": "${KUBEADM_ADDRESS}",
+    "${KUBERNETES_DISTRO}": {
+        "address": "${SERVER_ADDRESS}",
         "token": "${TOKEN}",
         "ca": "sha256:${CACERT}",
         "extras-args": [
             "--ignore-preflight-errors=All"
-        ]
-    },
-    "k3s": {
+        ],
         "datastore-endpoint": "${ETCD_ENDPOINT}",
         "extras-commands": [
         ]
