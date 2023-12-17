@@ -123,7 +123,7 @@ while true; do
         shift 2
         ;;
     -n|--cluster-nodes)
-        IFS=, read -a CLUSTER_NODES<<<$2
+        IFS=, read -a CLUSTER_NODES <<< "$2"
         shift 2
         ;;
     -k|--kubernetes-version)
