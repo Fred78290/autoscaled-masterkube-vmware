@@ -1412,6 +1412,7 @@ do
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
                     --k8s-distribution=${KUBERNETES_DISTRO} \
+                    --delete-credentials-provider=${DELETE_CREDENTIALS_CONFIG} \
                     --max-pods=${MAX_PODS} \
                     --vm-uuid=${VMUUID} \
                     --csi-region=${GOVC_REGION} \
