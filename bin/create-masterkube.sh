@@ -92,6 +92,7 @@ export AWS_ROUTE53_ACCESSKEY=
 export AWS_ROUTE53_SECRETKEY=
 export UPGRADE_CLUSTER=NO
 export MASTER_NODE_ALLOW_DEPLOYMENT=NO
+export DELETE_CREDENTIALS_CONFIG=NO
 
 # defined in private govc.defs
 export CERT_EMAIL=
@@ -645,6 +646,9 @@ fi
 
 if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
+    if [ ${K8S_MAJOR} -eq 28 ] && [ ${K8S_MINOR} -eq 4 ]; then 
+        DELETE_CREDENTIALS_CONFIG=YES
+    fi
 
     if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
         RANCHER_CHANNEL=$(curl -s https://update.rke2.io/v1-release/channels)
@@ -854,6 +858,7 @@ export CNI_PLUGIN_VERSION=${CNI_PLUGIN_VERSION}
 export CONTROLNODES=${CONTROLNODES}
 export CORESTOTAL="${CORESTOTAL}"
 export DEFAULT_MACHINE=${DEFAULT_MACHINE}
+export DELETE_CREDENTIALS_CONFIG=${DELETE_CREDENTIALS_CONFIG}
 export EXTERNAL_ETCD=${EXTERNAL_ETCD}
 export FIRSTNODE=${FIRSTNODE}
 export GODADDY_API_KEY=${GODADDY_API_KEY}
@@ -1312,6 +1317,7 @@ do
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
                     --k8s-distribution=${KUBERNETES_DISTRO} \
+                    --delete-credentials-provider=${DELETE_CREDENTIALS_CONFIG} \
                     --vm-uuid=${VMUUID} \
                     --csi-region=${GOVC_REGION} \
                     --csi-zone=${GOVC_ZONE} \
@@ -1341,6 +1347,7 @@ do
 
                 ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo create-cluster.sh \
                     --k8s-distribution=${KUBERNETES_DISTRO} \
+                    --delete-credentials-provider=${DELETE_CREDENTIALS_CONFIG} \
                     --vm-uuid=${VMUUID} \
                     --csi-region=${GOVC_REGION} \
                     --csi-zone=${GOVC_ZONE} \
@@ -1379,6 +1386,7 @@ do
 
                     eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo join-cluster.sh \
                         --k8s-distribution=${KUBERNETES_DISTRO} \
+                        --delete-credentials-provider=${DELETE_CREDENTIALS_CONFIG} \
                         --max-pods=${MAX_PODS} \
                         --vm-uuid=${VMUUID} \
                         --csi-region=${GOVC_REGION} \

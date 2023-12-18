@@ -32,6 +32,7 @@ CSI_REGION=home
 CSI_ZONE=office
 KUBERNETES_DISTRO=kubeadm
 ETCD_ENDPOINT=
+DELETE_CREDENTIALS_CONFIG=NO
 
 if [ "$(uname -p)" == "aarch64" ]; then
 	ARCH="arm64"
@@ -39,7 +40,7 @@ else
 	ARCH="amd64"
 fi
 
-TEMP=$(getopt -o xm:g:r:i:c:n:k: --long etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
+TEMP=$(getopt -o xm:g:r:i:c:n:k: --long delete-credentials-provider:,etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -64,6 +65,10 @@ while true; do
         ;;
     --allow-deployment)
         MASTER_NODE_ALLOW_DEPLOYMENT=$2
+        shift 2
+        ;;
+    --delete-credentials-provider)
+        DELETE_CREDENTIALS_CONFIG=$2
         shift 2
         ;;
     --k8s-distribution)
@@ -167,6 +172,15 @@ while true; do
         ;;
     esac
 done
+
+# Hack because k3s and rke2 1.28.4 don't set the good feature gates
+if [ "${DELETE_CREDENTIALS_CONFIG}" == "YES" ]; then
+    case "${KUBERNETES_DISTRO}" in
+        k3s|rke2)
+            rm -rf /var/lib/rancher/credentialprovider
+            ;;
+    esac
+fi
 
 # Check if interface exists, else take inet default gateway
 ifconfig $NET_IF &> /dev/null || NET_IF=$(ip route get 1|awk '{print $5;exit}')

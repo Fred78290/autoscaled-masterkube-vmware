@@ -21,8 +21,9 @@ CSI_REGION=home
 CSI_ZONE=office
 KUBERNETES_DISTRO=kubeadm
 ETCD_ENDPOINT=
+DELETE_CREDENTIALS_CONFIG=NO
 
-TEMP=$(getopt -o i:g:c:n: --long max-pods:,etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+TEMP=$(getopt -o i:g:c:n: --long delete-credentials-provider:,max-pods:,etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -86,6 +87,10 @@ while true; do
         CSI_ZONE=$2
         shift 2
         ;;
+    --delete-credentials-provider)
+        DELETE_CREDENTIALS_CONFIG=$2
+        shift 2
+        ;;
     --k8s-distribution)
         case "$2" in
             kubeadm|k3s|rke2)
@@ -109,6 +114,15 @@ while true; do
         ;;
     esac
 done
+
+# Hack because k3s and rke2 1.28.4 don't set the good feature gates
+if [ "${DELETE_CREDENTIALS_CONFIG}" == "YES" ]; then
+    case "${KUBERNETES_DISTRO}" in
+        k3s|rke2)
+            rm -rf /var/lib/rancher/credentialprovider
+            ;;
+    esac
+fi
 
 ifconfig $NET_IF &> /dev/null || NET_IF=$(ip route get 1|awk '{print $5;exit}')
 APISERVER_ADVERTISE_ADDRESS=$(ip addr show $NET_IF | grep "inet\s" | tr '/' ' ' | awk '{print $2}')
