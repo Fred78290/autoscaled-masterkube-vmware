@@ -207,6 +207,11 @@ if [ "$HA_CLUSTER" = "true" ]; then
 fi
 
 function collect_cert_sans() {
+    local LB_IP=
+    local CERT_EXTRA=
+    local CLUSTER_NODE=
+    local CLUSTER_IP=
+    local CLUSTER_HOST=
     local TLS_SNA=(
         "${LOAD_BALANCER_IP}"
         "${CONTROL_PLANE_ENDPOINT_HOST}"
@@ -222,26 +227,25 @@ function collect_cert_sans() {
 
     for CLUSTER_NODE in ${CLUSTER_NODES[*]}
     do
-        IFS=: read HOST IP <<< $CLUSTER_NODE
-        if [ -n ${IP} ] && [[ ! ${TLS_SNA[*]} =~ "${IP}" ]]; then
-            TLS_SNA+=("${CERT_EXTRA}")
+        IFS=: read CLUSTER_HOST CLUSTER_IP <<< $CLUSTER_NODE
+        if [ -n ${CLUSTER_IP} ] && [[ ! ${TLS_SNA[*]} =~ "${CLUSTER_IP}" ]]; then
+            TLS_SNA+=("${CLUSTER_IP}")
         fi
 
-        if [ -n ${HOST} ]; then
-            [[ ! ${TLS_SNA[*]} =~ "${HOST}" ]] && TLS_SNA+=("${HOST}")
-            HOST="${HOST%%.*}"
-            [[ ! ${TLS_SNA[*]} =~ "${HOST}" ]] && TLS_SNA+=("${HOST}")
+        if [ -n ${CLUSTER_HOST} ]; then
+            [[ ! ${TLS_SNA[*]} =~ "${CLUSTER_HOST}" ]] && TLS_SNA+=("${CLUSTER_HOST}")
+            CLUSTER_HOST="${CLUSTER_HOST%%.*}"
+            [[ ! ${TLS_SNA[*]} =~ "${CLUSTER_HOST}" ]] && TLS_SNA+=("${CLUSTER_HOST}")
         fi
     done
 
-    echo -n "${TLS_SNA[*]}" | tr ' ' ','
+    echo -n "${TLS_SNA[*]}"
 }
 
 CERT_SANS="$(collect_cert_sans)"
 
 if [ ${KUBERNETES_DISTRO} == "rke2" ]; then
     ANNOTE_MASTER=true
-    IFS=',' read -ra CERT_SANS <<<"${CERT_SANS}"
 
     cat > /etc/rancher/rke2/config.yaml <<EOF
 kubelet-arg:
@@ -260,7 +264,7 @@ disable:
 tls-san:
 EOF
 
-    for CERT_SAN in ${CERT_SANS[*]} 
+    for CERT_SAN in ${CERT_SANS} 
     do
         echo "  - ${CERT_SAN}" >> /etc/rancher/rke2/config.yaml
     done
@@ -320,6 +324,7 @@ EOF
 
 elif [ ${KUBERNETES_DISTRO} == "k3s" ]; then
     ANNOTE_MASTER=true
+    CERT_SANS=$(echo -n ${CERT_SANS} | tr ' ' ',')
 
     echo "K3S_MODE=server" > /etc/default/k3s
     echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --kubelet-arg=max-pods=${MAX_PODS} --node-name=${HOSTNAME} --advertise-address=${APISERVER_ADVERTISE_ADDRESS} --advertise-port=${APISERVER_ADVERTISE_PORT} --tls-san=${CERT_SANS}'" > /etc/systemd/system/k3s.service.env
@@ -490,7 +495,7 @@ apiServer:
   certSANs:
 EOF
 
-    for CERT_SAN in ${CERT_SANS[*]} 
+    for CERT_SAN in ${CERT_SANS} 
     do
         echo "  - $CERT_SAN" >> ${KUBEADM_CONFIG}
     done
