@@ -716,6 +716,7 @@ fi
 
 # Check variables coherence
 if [ "${HA_CLUSTER}" = "true" ]; then
+    CONTROLNODES=3
     if [ ${USE_KEEPALIVED} = "YES" ]; then
         FIRSTNODE=1
     fi
