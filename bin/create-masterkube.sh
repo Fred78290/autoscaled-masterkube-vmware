@@ -648,8 +648,11 @@ fi
 if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     LOAD_BALANCER_PORT="${LOAD_BALANCER_PORT},9345"
 fi
+
 if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
+    IFS=. read K8S_VERSION K8S_MAJOR K8S_MINOR <<< "${KUBERNETES_VERSION}"
+
     if [ ${K8S_MAJOR} -eq 28 ] && [ ${K8S_MINOR} -eq 4 ]; then 
         DELETE_CREDENTIALS_CONFIG=YES
     fi
@@ -660,7 +663,6 @@ if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; 
         RANCHER_CHANNEL=$(curl -s https://update.k3s.io/v1-release/channels)
     fi
 
-    IFS=. read K8S_VERSION K8S_MAJOR K8S_MINOR <<< "${KUBERNETES_VERSION}"
     KUBERNETES_VERSION=$(echo -n "${RANCHER_CHANNEL}" | jq -r --arg KUBERNETES_VERSION "${K8S_VERSION}.${K8S_MAJOR}" '.data[]|select(.id == $KUBERNETES_VERSION)|.latest//""')
 
     if [ -z "${KUBERNETES_VERSION}" ]; then
