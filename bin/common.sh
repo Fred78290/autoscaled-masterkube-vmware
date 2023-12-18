@@ -93,8 +93,13 @@ if [ "${OSDISTRO}" == "Darwin" ]; then
         exit 1
     fi
 
-    if [ ! -e /usr/local/opt/gnu-getopt/bin/getopt ]; then
+    if [ ! -e /usr/local/opt/gnu-getopt/bin/getopt ] && [ ! -e /opt/homebrew/opt/gnu-getopt/bin/getopt ]; then
         echo_red_bold "You must install gnu gnu-getopt with brew (brew install coreutils), this script is not compatible with the native macos base64"
+        exit 1
+    fi
+
+    if [ -z "$(command -v jq)" ]; then
+        echo_red_bold "You must install gnu jq with brew (brew install jq)"
         exit 1
     fi
 
@@ -102,7 +107,12 @@ if [ "${OSDISTRO}" == "Darwin" ]; then
 
     alias base64=gbase64
     alias sed=gsed
-    alias getopt=/usr/local/opt/gnu-getopt/bin/getopt
+
+    if [ -e /usr/local/opt/gnu-getopt/bin/getopt ]; then
+        alias getopt=/usr/local/opt/gnu-getopt/bin/getopt
+    else
+        alias getopt=/opt/homebrew/opt/gnu-getopt/bin/getopt
+    fi
 
     function delete_host() {
         sudo gsed -i "/$1/d" /etc/hosts
