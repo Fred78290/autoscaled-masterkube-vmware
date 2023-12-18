@@ -5,7 +5,7 @@ set -e
 NODEGROUP_NAME="vmware-ca-k8s"
 CNI_PLUGIN=flannel
 NET_IF=$(ip route get 1|awk '{print $5;exit}')
-export KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
+KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
 CLUSTER_DIR=/etc/cluster
 KUBEADM_CONFIG=/etc/kubernetes/kubeadm-config.yaml
 HA_CLUSTER=false
