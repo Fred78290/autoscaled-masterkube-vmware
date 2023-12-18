@@ -71,8 +71,8 @@ TARGET_CLUSTER_LOCATION=${CONFIGURATION_LOCATION}/cluster/${NODEGROUP_NAME}
 
 echo_blue_bold "Delete masterkube ${MASTERKUBE} previous instance"
 
-if [ -f ${TARGET_CLUSTER_LOCATION}/buildenv ]; then
-    source ${TARGET_CLUSTER_LOCATION}/buildenv
+if [ -f ${TARGET_CONFIG_LOCATION}/buildenv ]; then
+    source ${TARGET_CONFIG_LOCATION}/buildenv
 fi
 
 if [ "$FORCE" = "YES" ]; then
@@ -95,8 +95,9 @@ if [ "$FORCE" = "YES" ]; then
             govc vm.destroy $MASTERKUBE_NODE
         fi
 
-        delete_host"/${MASTERKUBE_NODE}/d"
+        delete_host "${MASTERKUBE_NODE}"
     done
+
 elif [ -f ${TARGET_CLUSTER_LOCATION}/config ]; then
     for vm in $(kubectl get node -o json --kubeconfig ${TARGET_CLUSTER_LOCATION}/config | jq '.items| .[] | .metadata.labels["kubernetes.io/hostname"]')
     do
