@@ -72,6 +72,7 @@ export NETWORK_PUBLIC_ROUTES=()
 export NETWORK_PRIVATE_ROUTES=()
 export METALLB_IP_RANGE=10.0.0.100-10.0.0.127
 export REGISTRY=fred78290
+export LOAD_BALANCER_PORT=6443
 export LAUNCH_CA=YES
 export PUBLIC_IP=DHCP
 export SCALEDNODES_DHCP=true
@@ -644,6 +645,9 @@ if [ "${GRPC_PROVIDER}" != "grpc" ] && [ "${GRPC_PROVIDER}" != "externalgrpc" ];
     exit
 fi
 
+if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
+    LOAD_BALANCER_PORT="${LOAD_BALANCER_PORT},9345"
+fi
 if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
     if [ ${K8S_MAJOR} -eq 28 ] && [ ${K8S_MINOR} -eq 4 ]; then 
@@ -870,6 +874,7 @@ export KUBERNETES_PASSWORD=${KUBERNETES_PASSWORD}
 export KUBERNETES_USER=${KUBERNETES_USER}
 export KUBERNETES_VERSION=${KUBERNETES_VERSION}
 export LAUNCH_CA=${LAUNCH_CA}
+export LOAD_BALANCER_PORT=${LOAD_BALANCER_PORT}
 export MASTERKUBE="${MASTERKUBE}"
 export MAXAUTOPROVISIONNEDNODEGROUPCOUNT=${MAXAUTOPROVISIONNEDNODEGROUPCOUNT}
 export MAXNODES=${MAXNODES}
@@ -1309,6 +1314,7 @@ do
                 echo_blue_bold "Start load balancer ${MASTERKUBE_NODE} instance"
 
                 eval ssh ${SSH_OPTIONS} ${KUBERNETES_USER}@${IPADDR} sudo install-load-balancer.sh \
+                    --listen-port=${LOAD_BALANCER_PORT} \
                     --cluster-nodes="${CLUSTER_NODES}" \
                     --control-plane-endpoint=${MASTERKUBE}.${DOMAIN_NAME} \
                     --listen-ip=${NET_IP} ${SILENT}
