@@ -647,6 +647,7 @@ fi
 
 if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     LOAD_BALANCER_PORT="${LOAD_BALANCER_PORT},9345"
+    EXTERNAL_ETCD=false
 fi
 
 if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
