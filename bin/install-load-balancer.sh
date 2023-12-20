@@ -5,7 +5,7 @@ set -e
 CONTROL_PLANE_ENDPOINT=
 CLUSTER_NODES=
 NET_IP=0.0.0.0
-LOAD_BALANCER_PORT=(6443)
+LOAD_BALANCER_PORT=6443
 
 TEMP=$(getopt -o l:c:p:n: --long listen-port:,listen-ip:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
@@ -19,7 +19,7 @@ while true; do
         shift 2
         ;;
     -p | --listen-port)
-        IFS=, read -a LOAD_BALANCER_PORT <<< "$2"
+        LOAD_BALANCER_PORT=$2
         shift 2
         ;;
     -n | --cluster-nodes)
@@ -89,7 +89,7 @@ function create_tcp_stream() {
             IFS=: read HOST IP <<< "$CLUSTER_NODE"
 
             if [ -n ${HOST} ]; then
-                echo "    server ${IP}:${TCP_PORT} max_fails=3 fail_timeout=30s;" >> ${NGINX_CONF}
+                echo "    server ${IP}:${PORT} max_fails=3 fail_timeout=30s;" >> ${NGINX_CONF}
             fi
         done
 
