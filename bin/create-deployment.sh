@@ -22,6 +22,8 @@ fi
 echo_title "Create VSphere CSI provisionner"
 create-vsphere-provisionner.sh
 
+echo_title "Create autoscaler"
+create-autoscaler.sh $LAUNCH_CA
 echo_title "Create MetalLB"
 create-metallb.sh
 
@@ -48,11 +50,6 @@ create-helloworld.sh
 
 echo_title "Create External DNS"
 create-external-dns.sh
-
-if [ "$LAUNCH_CA" != "NO" ]; then
-	echo_title "Create autoscaler"
-    create-autoscaler.sh $LAUNCH_CA
-fi
 
 NGINX_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -o json | jq -r '.status.loadBalancer.ingress[0].ip//""')
 

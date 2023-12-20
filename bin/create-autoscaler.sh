@@ -1,6 +1,10 @@
 #/bin/bash
 LAUNCH_CA=$1
 
+if [ $LAUNCH_CA == "NO" ]; then
+    exit
+fi
+
 CURDIR=$(dirname $0)
 
 pushd $CURDIR/../ &>/dev/null
