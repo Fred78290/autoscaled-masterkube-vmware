@@ -1001,6 +1001,46 @@ fi
 PUBLIC_ROUTES_DEFS=$(build_routes ${NETWORK_PUBLIC_ROUTES[@]})
 PRIVATE_ROUTES_DEFS=$(build_routes ${NETWORK_PRIVATE_ROUTES[@]})
 
+function collect_cert_sans() {
+    local LOAD_BALANCER_IP=$1
+    local CLUSTER_NODES=$2
+    local CERT_EXTRA_SANS=$3
+
+    local LB_IP=
+    local CERT_EXTRA=
+    local CLUSTER_NODE=
+    local CLUSTER_IP=
+    local CLUSTER_HOST=
+    local TLS_SNA=(
+        "${LOAD_BALANCER_IP}"
+    )
+
+    for CERT_EXTRA in $(echo ${CERT_EXTRA_SANS} | tr ',' ' ')
+    do
+        if [[ ! ${TLS_SNA[*]} =~ "${CERT_EXTRA}" ]]; then
+            TLS_SNA+=("${CERT_EXTRA}")
+        fi
+    done
+
+    for CLUSTER_NODE in $(echo ${CLUSTER_NODES} | tr ',' ' ')
+    do
+        IFS=: read CLUSTER_HOST CLUSTER_IP <<< "$CLUSTER_NODE"
+
+        if [ -n ${CLUSTER_IP} ] && [[ ! ${TLS_SNA[*]} =~ "${CLUSTER_IP}" ]]; then
+            TLS_SNA+=("${CLUSTER_IP}")
+        fi
+
+        if [ -n "${CLUSTER_HOST}" ]; then
+            if [[ ! ${TLS_SNA[*]} =~ "${CLUSTER_HOST}" ]]; then
+                TLS_SNA+=("${CLUSTER_HOST}")
+                TLS_SNA+=("${CLUSTER_HOST%%.*}")
+            fi
+        fi
+    done
+
+    echo -n "${TLS_SNA[*]}" | tr ' ' ','
+}
+
 function create_vm() {
     local INDEX=$1
     local PUBLIC_NODE_IP=$2
@@ -1291,6 +1331,8 @@ else
     echo "export CLUSTER_NODES=${CLUSTER_NODES}" >> ${TARGET_CONFIG_LOCATION}/buildenv
 fi
 
+CERT_SANS=$(collect_cert_sans "${IPADDRS[0]}" "${CLUSTER_NODES}" "${MASTERKUBE}.${DOMAIN_NAME}")
+
 for INDEX in $(seq ${FIRSTNODE} ${TOTALNODES})
 do
     NODEINDEX=${INDEX}
@@ -1336,7 +1378,7 @@ do
                     --allow-deployment=${MASTER_NODE_ALLOW_DEPLOYMENT} \
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
                     --container-runtime=${CONTAINER_ENGINE} \
-                    --cert-extra-sans="${MASTERKUBE}.${DOMAIN_NAME}" \
+                    --tls-san="${CERT_SANS}" \
                     --cluster-nodes="${CLUSTER_NODES}" \
                     --node-group=${NODEGROUP_NAME} \
                     --node-index=${NODEINDEX} \
@@ -1372,6 +1414,7 @@ do
                     --cluster-nodes="${CLUSTER_NODES}" \
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[1]}" \
                     --etcd-endpoint="${ETCD_ENDPOINT}" \
+                    --tls-san="${CERT_SANS}" \
                     --ha-cluster=true \
                     --cni=${CNI_PLUGIN} \
                     --net-if=${NET_IF} \
@@ -1406,6 +1449,7 @@ do
                         --node-group=${NODEGROUP_NAME} \
                         --node-index=${NODEINDEX} \
                         --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
+                        --tls-san="${CERT_SANS}" \
                         --etcd-endpoint="${ETCD_ENDPOINT}" \
                         --net-if=${NET_IF} \
                         --cluster-nodes="${CLUSTER_NODES}" ${SILENT}
@@ -1426,6 +1470,7 @@ do
                     --node-group=${NODEGROUP_NAME} \
                     --node-index=${NODEINDEX} \
                     --control-plane-endpoint="${MASTERKUBE}.${DOMAIN_NAME}:${IPADDRS[0]}" \
+                    --tls-san="${CERT_SANS}" \
                     --etcd-endpoint="${ETCD_ENDPOINT}" \
                     --cluster-nodes="${CLUSTER_NODES}" \
                     --net-if=${NET_IF} \

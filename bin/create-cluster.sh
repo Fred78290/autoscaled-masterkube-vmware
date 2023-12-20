@@ -13,6 +13,7 @@ CONTROL_PLANE_ENDPOINT=
 CONTROL_PLANE_ENDPOINT_HOST=
 CONTROL_PLANE_ENDPOINT_ADDR=
 CLUSTER_NODES=()
+CERT_SANS=
 MAX_PODS=110
 TOKEN_TLL="0s"
 APISERVER_ADVERTISE_PORT=6443
@@ -40,7 +41,7 @@ else
 	ARCH="amd64"
 fi
 
-TEMP=$(getopt -o xm:g:r:i:c:n:k: --long delete-credentials-provider:,etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cert-extra-sans:,cni:,kubernetes-version: -n "$0" -- "$@")
+TEMP=$(getopt -o xm:g:r:i:c:n:k: --long tls-san:,delete-credentials-provider:,etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,allow-deployment:,max-pods:,trace:,container-runtime:,node-index:,use-external-etcd:,load-balancer-ip:,node-group:,cluster-nodes:,control-plane-endpoint:,ha-cluster:,net-if:,cni:,kubernetes-version: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -139,8 +140,8 @@ while true; do
         NET_IF=$2
         shift 2
         ;;
-    --cert-extra-sans)
-        IFS=, read -a CERT_EXTRA_SANS<<<$2
+    --tls-san)
+        CERT_SANS=$2
         shift 2
         ;;
 
@@ -206,44 +207,6 @@ if [ "$HA_CLUSTER" = "true" ]; then
     done
 fi
 
-function collect_cert_sans() {
-    local LB_IP=
-    local CERT_EXTRA=
-    local CLUSTER_NODE=
-    local CLUSTER_IP=
-    local CLUSTER_HOST=
-    local TLS_SNA=(
-        "${LOAD_BALANCER_IP}"
-        "${CONTROL_PLANE_ENDPOINT_HOST}"
-        "${CONTROL_PLANE_ENDPOINT_HOST%%.*}"
-    )
-
-    for CERT_EXTRA in ${CERT_EXTRA_SANS[*]} 
-    do
-        if [[ ! ${TLS_SNA[*]} =~ "${CERT_EXTRA}" ]]; then
-            TLS_SNA+=("${CERT_EXTRA}")
-        fi
-    done
-
-    for CLUSTER_NODE in ${CLUSTER_NODES[*]}
-    do
-        IFS=: read CLUSTER_HOST CLUSTER_IP <<< $CLUSTER_NODE
-        if [ -n ${CLUSTER_IP} ] && [[ ! ${TLS_SNA[*]} =~ "${CLUSTER_IP}" ]]; then
-            TLS_SNA+=("${CLUSTER_IP}")
-        fi
-
-        if [ -n ${CLUSTER_HOST} ]; then
-            [[ ! ${TLS_SNA[*]} =~ "${CLUSTER_HOST}" ]] && TLS_SNA+=("${CLUSTER_HOST}")
-            CLUSTER_HOST="${CLUSTER_HOST%%.*}"
-            [[ ! ${TLS_SNA[*]} =~ "${CLUSTER_HOST}" ]] && TLS_SNA+=("${CLUSTER_HOST}")
-        fi
-    done
-
-    echo -n "${TLS_SNA[*]}"
-}
-
-CERT_SANS="$(collect_cert_sans)"
-
 if [ ${KUBERNETES_DISTRO} == "rke2" ]; then
     ANNOTE_MASTER=true
 
@@ -264,7 +227,7 @@ disable:
 tls-san:
 EOF
 
-    for CERT_SAN in ${CERT_SANS} 
+    for CERT_SAN in $(echo -n ${CERT_SANS} | tr ',' ' ')
     do
         echo "  - ${CERT_SAN}" >> /etc/rancher/rke2/config.yaml
     done
@@ -324,7 +287,6 @@ EOF
 
 elif [ ${KUBERNETES_DISTRO} == "k3s" ]; then
     ANNOTE_MASTER=true
-    CERT_SANS=$(echo -n ${CERT_SANS} | tr ' ' ',')
 
     echo "K3S_MODE=server" > /etc/default/k3s
     echo "K3S_ARGS='--kubelet-arg=provider-id=vsphere://${VMUUID} --kubelet-arg=max-pods=${MAX_PODS} --node-name=${HOSTNAME} --advertise-address=${APISERVER_ADVERTISE_ADDRESS} --advertise-port=${APISERVER_ADVERTISE_PORT} --tls-san=${CERT_SANS}'" > /etc/systemd/system/k3s.service.env
@@ -495,7 +457,7 @@ apiServer:
   certSANs:
 EOF
 
-    for CERT_SAN in ${CERT_SANS} 
+    for CERT_SAN in $(echo -n ${CERT_SANS} | tr ',' ' ')
     do
         echo "  - $CERT_SAN" >> ${KUBEADM_CONFIG}
     done

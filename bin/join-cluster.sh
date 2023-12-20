@@ -7,6 +7,7 @@ CONTROL_PLANE_ENDPOINT=
 CONTROL_PLANE_ENDPOINT_HOST=
 CONTROL_PLANE_ENDPOINT_ADDR=
 CLUSTER_NODES=
+CERT_SANS=
 HA_CLUSTER=false
 EXTERNAL_ETCD=NO
 NODEINDEX=0
@@ -23,7 +24,7 @@ KUBERNETES_DISTRO=kubeadm
 ETCD_ENDPOINT=
 DELETE_CREDENTIALS_CONFIG=NO
 
-TEMP=$(getopt -o i:g:c:n: --long delete-credentials-provider:,max-pods:,etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
+TEMP=$(getopt -o i:g:c:n: --long tls-san:,delete-credentials-provider:,max-pods:,etcd-endpoint:,k8s-distribution:,csi-region:,csi-zone:,vm-uuid:,net-if:,allow-deployment:,join-master:,node-index:,use-external-etcd:,control-plane:,node-group:,cluster-nodes:,control-plane-endpoint: -n "$0" -- "$@")
 
 eval set -- "${TEMP}"
 
@@ -40,7 +41,11 @@ while true; do
         ;;
     -c|--control-plane-endpoint)
         CONTROL_PLANE_ENDPOINT="$2"
-        IFS=: read CONTROL_PLANE_ENDPOINT_HOST CONTROL_PLANE_ENDPOINT_ADDR <<< $CONTROL_PLANE_ENDPOINT
+        IFS=: read CONTROL_PLANE_ENDPOINT_HOST CONTROL_PLANE_ENDPOINT_ADDR <<< "$CONTROL_PLANE_ENDPOINT"
+        shift 2
+        ;;
+    --tls-san)
+        CERT_SANS=$2
         shift 2
         ;;
     -n|--cluster-nodes)
@@ -156,6 +161,7 @@ kubelet-arg:
   - max-pods=${MAX_PODS}
 node-name: ${HOSTNAME}
 server: https://${MASTER_IP%%:*}:9345
+advertise-address: ${APISERVER_ADVERTISE_ADDRESS}
 token: ${TOKEN}
 EOF
 
@@ -168,6 +174,12 @@ EOF
         echo "  - servicelb" >> /etc/rancher/rke2/config.yaml
         echo "  - rke2-ingress-nginx" >> /etc/rancher/rke2/config.yaml
         echo "  - rke2-metrics-server" >> /etc/rancher/rke2/config.yaml
+        echo "tls-san:" >> /etc/rancher/rke2/config.yaml
+
+        for CERT_SAN in $(echo -n ${CERT_SANS} | tr ',' ' ')
+        do
+            echo "  - ${CERT_SAN}" >> /etc/rancher/rke2/config.yaml
+        done
 
         if [ "${EXTERNAL_ETCD}" == "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
             echo "datastore-endpoint: ${ETCD_ENDPOINT}" >> /etc/rancher/rke2/config.yaml
