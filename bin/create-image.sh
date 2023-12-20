@@ -116,7 +116,7 @@ fi
 echo_blue_bold "Ubuntu password:$PASSWORD"
 
 BOOTSTRAP_PASSWORD=$(uuidgen)
-read -a VCENTER <<<"$(echo $GOVC_URL | awk -F/ '{print $3}' | tr '@' ' ')"
+read -a VCENTER <<< "$(echo $GOVC_URL | awk -F/ '{print $3}' | tr '@' ' ')"
 VCENTER=${VCENTER[${#VCENTER[@]} - 1]}
 
 USERDATA=$(base64 <<EOF

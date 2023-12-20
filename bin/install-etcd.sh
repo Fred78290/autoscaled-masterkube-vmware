@@ -47,7 +47,7 @@ done
 
 for CLUSTER_NODE in $(echo -n ${CLUSTER_NODES} | tr ',' ' ')
 do
-    IFS=: read HOST IP <<< ${CLUSTER_NODE}
+    IFS=: read HOST IP <<< "${CLUSTER_NODE}"
 
     sed -i "/${HOST}/d" /etc/hosts
     echo "${IP}   ${HOST} ${HOST%%.*}" >> /etc/hosts

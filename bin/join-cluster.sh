@@ -133,7 +133,7 @@ echo "$CONTROL_PLANE_ENDPOINT_ADDR   $CONTROL_PLANE_ENDPOINT_HOST" >> /etc/hosts
 
 for CLUSTER_NODE in $(echo -n $CLUSTER_NODES | tr ',' ' ')
 do
-    IFS=: read HOST IP <<< $CLUSTER_NODE
+    IFS=: read HOST IP <<< "$CLUSTER_NODE"
     sed -i "/$HOST/d" /etc/hosts
     echo "$IP   $HOST" >> /etc/hosts
 done

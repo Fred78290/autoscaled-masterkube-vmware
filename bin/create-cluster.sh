@@ -124,7 +124,7 @@ while true; do
         ;;
     -c|--control-plane-endpoint)
         CONTROL_PLANE_ENDPOINT="$2"
-        IFS=: read CONTROL_PLANE_ENDPOINT_HOST CONTROL_PLANE_ENDPOINT_ADDR <<< $CONTROL_PLANE_ENDPOINT
+        IFS=: read CONTROL_PLANE_ENDPOINT_HOST CONTROL_PLANE_ENDPOINT_ADDR <<< "$CONTROL_PLANE_ENDPOINT"
         shift 2
         ;;
     -n|--cluster-nodes)
@@ -200,7 +200,7 @@ echo "${APISERVER_ADVERTISE_ADDRESS} $(hostname) ${CONTROL_PLANE_ENDPOINT_HOST}"
 if [ "$HA_CLUSTER" = "true" ]; then
     for CLUSTER_NODE in ${CLUSTER_NODES[*]}
     do
-        IFS=: read HOST IP <<< $CLUSTER_NODE
+        IFS=: read HOST IP <<< "$CLUSTER_NODE"
         sed -i "/$HOST/d" /etc/hosts
         echo "${IP}   ${HOST} ${HOST%%.*}" >> /etc/hosts
     done
@@ -401,7 +401,7 @@ else
             exit -1
     esac
 
-    IFS=. read VERSION MAJOR MINOR <<<$KUBERNETES_VERSION
+    IFS=. read VERSION MAJOR MINOR <<< "$KUBERNETES_VERSION"
 
     cat > ${KUBEADM_CONFIG} <<EOF
 apiVersion: kubeadm.k8s.io/v1beta3

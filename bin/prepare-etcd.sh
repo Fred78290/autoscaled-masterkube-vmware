@@ -1,4 +1,8 @@
 #!/bin/bash
+CURDIR=$(dirname $0)
+
+source $CURDIR/common.sh
+
 NODEGROUP_NAME="vmware-ca-k8s"
 
 TEMP=$(getopt -o c:g: --long node-group:,cluster-nodes: -n "$0" -- "$@")
@@ -34,7 +38,7 @@ ETCDNAMES=()
 
 for CLUSTER_NODE in $(echo -n ${CLUSTER_NODES} | tr ',' ' ')
 do
-    IFS=: read HOST IP <<< ${CLUSTER_NODE}
+    IFS=: read HOST IP <<< "${CLUSTER_NODE}"
 
     ETCDIPS+=($IP)
     ETCDHOSTS+=($HOST)
@@ -119,7 +123,9 @@ cfssl gencert -initca ca-csr.json | cfssljson -bare ./ssl/ca
 cfssl gencert -ca=./ssl/ca.pem -ca-key=./ssl/ca-key.pem -config=ca-config.json -profile=kubernetes etcd-csr.json | cfssljson -bare ./ssl/etcd
 popd &>/dev/null
 
-for INDEX in "${!ETCDHOSTS[@]}";
+echo "Create etcd config files"
+
+for INDEX in ${!ETCDHOSTS[@]}
 do
     echo "Generate etcd config index: $INDEX"
 
