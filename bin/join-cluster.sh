@@ -180,13 +180,6 @@ EOF
         do
             echo "  - ${CERT_SAN}" >> /etc/rancher/rke2/config.yaml
         done
-
-        if [ "${EXTERNAL_ETCD}" == "true" ] && [ -n "${ETCD_ENDPOINT}" ]; then
-            echo "datastore-endpoint: ${ETCD_ENDPOINT}" >> /etc/rancher/rke2/config.yaml
-            echo "datastore-cafile: /etc/etcd/ssl/ca.pem" >> /etc/rancher/rke2/config.yaml
-            echo "datastore-certfile: /etc/etcd/ssl/etcd.pem" >> /etc/rancher/rke2/config.yaml
-            echo "datastore-keyfile: /etc/etcd/ssl/etcd-key.pem" >> /etc/rancher/rke2/config.yaml
-        fi
     fi
 
     echo -n "Start ${RKE2_SERVICE} service"
