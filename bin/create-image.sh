@@ -217,6 +217,7 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         # Prepare seed VM
         echo_blue_bold "Install cloud-init VMWareGuestInfo datasource"
 
+        ssh -t "${USER}@${IPADDR}" sudo "sh -c 'apt update ; apt dist-upgrade -y ; apt install jq socat conntrack net-tools traceroute nfs-common unzip -y'"
         ssh -t "${USER}@${IPADDR}" sudo "sh -c 'echo datasource_list: [ NoCloud, VMware, OVF ] > /etc/cloud/cloud.cfg.d/99-VMWare-Only.cfg'"
 
         echo_blue_bold "clean cloud-init"
