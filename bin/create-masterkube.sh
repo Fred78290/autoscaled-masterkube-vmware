@@ -30,7 +30,7 @@ export SEED_USER=ubuntu
 export SEED_IMAGE="${DISTRO}-server-cloudimg-seed"
 export ROOT_IMG_NAME=${DISTRO}-kubernetes
 export CNI_PLUGIN=flannel
-export CNI_PLUGIN_VERSION="v1.2.0"
+export CNI_PLUGIN_VERSION="v1.4.0"
 export USE_ZEROSSL=YES
 export USE_KEEPALIVED=NO
 export HA_CLUSTER=false
@@ -654,7 +654,7 @@ if [ "${KUBERNETES_DISTRO}" == "k3s" ] || [ "${KUBERNETES_DISTRO}" == "rke2" ]; 
     WANTED_KUBERNETES_VERSION=${KUBERNETES_VERSION}
     IFS=. read K8S_VERSION K8S_MAJOR K8S_MINOR <<< "${KUBERNETES_VERSION}"
 
-    if [ ${K8S_MAJOR} -eq 28 ] && [ ${K8S_MINOR} -eq 4 ]; then 
+    if [ ${K8S_MAJOR} -eq 28 ] && [ ${K8S_MINOR} -lt 5 ]; then 
         DELETE_CREDENTIALS_CONFIG=YES
     fi
 
