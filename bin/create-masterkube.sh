@@ -1517,6 +1517,12 @@ else
     SERVER_ADDRESS="${MASTER_IP}"
 fi
 
+if [ "${DELETE_CREDENTIALS_CONFIG}" == "YES" ]; then
+    DELETE_CREDENTIALS_CONFIG=true
+else
+    DELETE_CREDENTIALS_CONFIG=false
+fi
+
 AUTOSCALER_CONFIG=$(cat <<EOF
 {
     "use-external-etcd": ${EXTERNAL_ETCD},
@@ -1554,6 +1560,7 @@ AUTOSCALER_CONFIG=$(cat <<EOF
             "--ignore-preflight-errors=All"
         ],
         "datastore-endpoint": "${ETCD_ENDPOINT}",
+        "delete-credentials-provider": ${DELETE_CREDENTIALS_CONFIG},
         "extras-commands": [
         ]
     },
