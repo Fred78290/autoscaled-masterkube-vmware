@@ -15,7 +15,7 @@
 CURDIR=$(dirname $0)
 DISTRO=jammy
 KUBERNETES_VERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
-CNI_PLUGIN_VERSION=v1.2.0
+CNI_PLUGIN_VERSION=v1.4.0
 SSH_KEY=$(cat ~/.ssh/id_rsa.pub)
 CACHE=~/.local/vmware/cache
 TARGET_IMAGE=${DISTRO}-kubernetes-$KUBERNETES_VERSION
@@ -354,7 +354,13 @@ mkdir -p ${CREDENTIALS_BIN}
 
 if [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
 
-    if [ ${KUBERNETES_MINOR_RELEASE} -gt 26 ]; then
+    if [ ${KUBERNETES_MINOR_RELEASE} -gt 28 ]; then
+        ECR_CREDS_VERSION=v1.29.0
+        KUBELET_CREDS_VERSION=v1
+    elif [ ${KUBERNETES_MINOR_RELEASE} -gt 27 ]; then
+        ECR_CREDS_VERSION=v1.28.5
+        KUBELET_CREDS_VERSION=v1
+    elif [ ${KUBERNETES_MINOR_RELEASE} -gt 26 ]; then
         ECR_CREDS_VERSION=v1.27.1
         KUBELET_CREDS_VERSION=v1
     elif [ ${KUBERNETES_MINOR_RELEASE} -gt 25 ]; then
@@ -532,7 +538,7 @@ SHELL
         echo "Install Containerd"
         echo "==============================================================================================================================="
 
-        curl -sL https://github.com/containerd/containerd/releases/download/v1.7.0/cri-containerd-cni-1.7.0-linux-${SEED_ARCH}.tar.gz | tar -C / -xz
+        curl -sL https://github.com/containerd/containerd/releases/download/v1.7.11/cri-containerd-cni-1.7.11-linux-${SEED_ARCH}.tar.gz | tar -C / -xz
 
         mkdir -p /etc/containerd
         containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/g' | tee /etc/containerd/config.toml
@@ -540,7 +546,7 @@ SHELL
         systemctl enable containerd.service
         systemctl restart containerd
 
-        curl -sL https://github.com/containerd/nerdctl/releases/download/v1.3.1/nerdctl-1.3.1-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
+        curl -sL https://github.com/containerd/nerdctl/releases/download/v1.7.2/nerdctl-1.7.2-linux-${SEED_ARCH}.tar.gz | tar -C /usr/local/bin -xz
     else
 
         echo "==============================================================================================================================="
@@ -645,7 +651,7 @@ SHELL
     echo "==============================================================================================================================="
 
     if [ "$CNI_PLUGIN" = "calico" ]; then
-        curl -s -O -L "https://github.com/projectcalico/calicoctl/releases/download/v3.18.2/calicoctl-linux-${SEED_ARCH}"
+        curl -s -O -L "https://github.com/projectcalico/calico/releases/download/v3.27.0/calicoctl-linux-${SEED_ARCH}"
         chmod +x calicoctl-linux-${SEED_ARCH}
         mv calicoctl-linux-${SEED_ARCH} /usr/local/bin/calicoctl
         pull_image https://docs.projectcalico.org/manifests/calico-vxlan.yaml
@@ -654,8 +660,7 @@ SHELL
     elif [ "$CNI_PLUGIN" = "weave" ]; then
         pull_image "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
     elif [ "$CNI_PLUGIN" = "canal" ]; then
-        pull_image https://raw.githubusercontent.com/projectcalico/canal/master/k8s-install/1.7/rbac.yaml
-        pull_image https://raw.githubusercontent.com/projectcalico/canal/master/k8s-install/1.7/canal.yaml
+        pull_image https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/canal.yaml
     elif [ "$CNI_PLUGIN" = "kube" ]; then
         pull_image https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter.yaml
         pull_image https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter-all-features.yaml
