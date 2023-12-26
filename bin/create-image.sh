@@ -217,26 +217,33 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
         # Prepare seed VM
         echo_blue_bold "Install cloud-init VMWareGuestInfo datasource"
 
-        ssh -t "${USER}@${IPADDR}" sudo "sh -c 'apt update ; apt dist-upgrade -y ; apt install jq socat conntrack net-tools traceroute nfs-common unzip -y'"
-        ssh -t "${USER}@${IPADDR}" sudo "sh -c 'echo datasource_list: [ NoCloud, VMware, OVF ] > /etc/cloud/cloud.cfg.d/99-VMWare-Only.cfg'"
+        ssh -t "${USER}@${IPADDR}" <<EOF
+        sudo sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"/' /etc/default/grub
+        sudo update-grub
+        sudo apt update
+        sudo apt dist-upgrade -y
+        sudo apt install jq socat conntrack net-tools traceroute nfs-common unzip -y
+        sudo sh -c 'echo datasource_list: [ NoCloud, VMware, OVF ] > /etc/cloud/cloud.cfg.d/99-VMWare-Only.cfg'
+        exit 
+EOF
 
         echo_blue_bold "clean cloud-init"
-        ssh -t "${USER}@${IPADDR}" sudo cloud-init clean
-        ssh -t "${USER}@${IPADDR}" sudo cloud-init clean -l
-        ssh -t "${USER}@${IPADDR}" sudo shutdown -h now
-        
+        ssh -t "${USER}@${IPADDR}" <<EOF
+        sudo cloud-init clean
+        cloud-init clean -l
+        sudo shutdown -h now
+EOF
+
         # Shutdown the guest
         govc vm.power -persist-session=false -s "${SEEDIMAGE}"
 
         echo_blue_bold "Wait ${SEEDIMAGE} to shutdown"
-        while [ $(govc vm.info -json "${SEEDIMAGE}" | jq .VirtualMachines[0].Runtime.PowerState | tr -d '"') == "poweredOn" ]
+        while [ $(govc vm.info -json "${SEEDIMAGE}" | jq .virtualMachines[0].runtime.powerState | tr -d '"') == "poweredOn" ]
         do
             echo_blue_dot
             sleep 1
         done
         echo
-
-        sleep 5
 
         echo_blue_bold "${SEEDIMAGE} is ready"
     else
@@ -311,8 +318,8 @@ CREDENTIALS_BIN=$CREDENTIALS_BIN
 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
-sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"/' /etc/default/grub
-update-grub
+#sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"/' /etc/default/grub
+#update-grub
 
 echo "==============================================================================================================================="
 echo "= Upgrade ubuntu distro"
@@ -321,13 +328,13 @@ apt update
 apt dist-upgrade -y
 echo
 
-apt update
+#apt update
 
-echo "==============================================================================================================================="
-echo "= Install mandatories packages"
-echo "==============================================================================================================================="
-apt install jq socat conntrack net-tools traceroute nfs-common unzip -y
-echo
+#echo "==============================================================================================================================="
+#echo "= Install mandatories packages"
+#echo "==============================================================================================================================="
+#apt install jq socat conntrack net-tools traceroute nfs-common unzip -y
+#echo
 
 mkdir -p /etc/kubernetes
 
@@ -746,14 +753,12 @@ ssh -t "${USER}@${IPADDR}" sudo ./prepare-image.sh
 govc vm.power -persist-session=false -s=true "${TARGET_IMAGE}"
 
 echo_blue_dot_title "Wait ${TARGET_IMAGE} to shutdown"
-while [ $(govc vm.info -json "${TARGET_IMAGE}" | jq .VirtualMachines[0].Runtime.PowerState | tr -d '"') == "poweredOn" ]
+while [ $(govc vm.info -json "${TARGET_IMAGE}" | jq .virtualMachines[0].runtime.powerState | tr -d '"') == "poweredOn" ]
 do
     echo_blue_dot
     sleep 1
 done
 echo
-
-sleep 10
 
 echo_blue_bold "Created image ${TARGET_IMAGE} with kubernetes version ${KUBERNETES_VERSION}"
 
