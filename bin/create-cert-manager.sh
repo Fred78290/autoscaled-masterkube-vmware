@@ -36,21 +36,21 @@ export KUBERNETES_TEMPLATE=./templates/cert-manager
 KUBERNETES_MINOR_RELEASE=$(echo -n $KUBERNETES_VERSION | tr '.' ' ' | awk '{ print $2 }')
 
 case $KUBERNETES_MINOR_RELEASE in
-    24)
-        CERT_MANAGER_VERSION=v1.8.0
-        GODADDY_WEBHOOK_VERSION=v1.24.6
-        ;;
-    25)
-        CERT_MANAGER_VERSION=v1.9.1
-        GODADDY_WEBHOOK_VERSION=v1.25.5
-        ;;
     26)
-        CERT_MANAGER_VERSION=v1.11.1
+        CERT_MANAGER_VERSION=v1.11.5
         GODADDY_WEBHOOK_VERSION=v1.26.1
         ;;
     27)
-        CERT_MANAGER_VERSION=v1.11.1
-        GODADDY_WEBHOOK_VERSION=v1.27.1
+        CERT_MANAGER_VERSION=v1.12.7
+        GODADDY_WEBHOOK_VERSION=v1.27.2
+        ;;
+    28)
+        CERT_MANAGER_VERSION=v1.13.3
+        GODADDY_WEBHOOK_VERSION=v1.28.4
+        ;;
+    29)
+        CERT_MANAGER_VERSION=v1.13.3
+        GODADDY_WEBHOOK_VERSION=v1.28.4
         ;;
 esac
 

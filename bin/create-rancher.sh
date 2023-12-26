@@ -11,7 +11,7 @@ export K8NAMESPACE=cattle-system
 
 kubectl create ns ${K8NAMESPACE} --kubeconfig=${TARGET_CLUSTER_LOCATION}/config --dry-run=client -o yaml | kubectl apply --kubeconfig=${TARGET_CLUSTER_LOCATION}/config -f -
 
-if [ ${KUBERNETES_MINOR_RELEASE} -lt 26 ]; then
+if [ ${KUBERNETES_MINOR_RELEASE} -lt 27 ]; then
     REPO=rancher-latest/rancher
 
     helm repo add rancher-latest https://releases.rancher.com/server-charts/latest
@@ -19,9 +19,9 @@ if [ ${KUBERNETES_MINOR_RELEASE} -lt 26 ]; then
 else
     REPO=/tmp/rancher/
 
-    curl -sL https://releases.rancher.com/server-charts/latest/rancher-2.7.3.tgz | tar zxvf - -C /tmp
+    curl -sL https://releases.rancher.com/server-charts/latest/rancher-2.8.0.tgz | tar zxvf - -C /tmp
 
-    sed -i -e 's/1.26.0-0/1.27.9-0/' /tmp/rancher/Chart.yaml
+    sed -i -e '/kubeVersion/d' /tmp/rancher/Chart.yaml
 fi
 
 cat > ${TARGET_DEPLOY_LOCATION}/rancher/rancher.yaml <<EOF
@@ -62,7 +62,7 @@ done
 echo
 
 echo_title "Rancher setup URL"
-echo_blue_bold "https://rancher-vmware.$DOMAIN_NAME/dashboard/?setup=${BOOTSTRAP_SECRET}"
+echo_blue_bold "https://rancher-vmware.$DOMAIN_NAME/dashboard/?setup=${BOOTSTRAP_SECRET}" | tee ${TARGET_DEPLOY_LOCATION}/rancher/rancher.log
 echo_line
 echo
 

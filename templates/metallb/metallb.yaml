@@ -400,8 +400,9 @@ spec:
                 type: integer
               communities:
                 description: The BGP communities to be associated with the announcement.
-                  Each item can be a community of the form 1234:1234 or the name of
-                  an alias defined in the Community CRD.
+                  Each item can be a standard community of the form 1234:1234, a large
+                  community of the form large:1234:1234:1234 or the name of an alias
+                  defined in the Community CRD.
                 items:
                   type: string
                 type: array
@@ -893,7 +894,8 @@ spec:
                       type: string
                     value:
                       description: The BGP community value corresponding to the given
-                        name.
+                        name. Can be a standard community of the form 1234:1234 or
+                        a large community of the form large:1234:1234:1234.
                       type: string
                   type: object
                 type: array
@@ -1423,6 +1425,14 @@ rules:
   - list
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - metallb.io
   resources:
   - addresspools
@@ -1495,6 +1505,12 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - list
 - apiGroups:
   - ""
   resources:
@@ -1672,6 +1688,15 @@ subjects:
   namespace: metallb-system
 ---
 apiVersion: v1
+data:
+  excludel2.yaml: |
+    announcedInterfacesToExclude: ["^docker.*", "^cbr.*", "^dummy.*", "^virbr.*", "^lxcbr.*", "^veth.*", "^lo$", "^cali.*", "^tunl.*", "^flannel.*", "^kube-ipvs.*", "^cni.*", "^nodelocaldns.*"]
+kind: ConfigMap
+metadata:
+  name: metallb-excludel2
+  namespace: metallb-system
+---
+apiVersion: v1
 kind: Secret
 metadata:
   name: webhook-server-cert
@@ -1721,7 +1746,7 @@ spec:
           value: memberlist
         - name: METALLB_DEPLOYMENT
           value: controller
-        image: quay.io/metallb/controller:v0.13.9
+        image: quay.io/metallb/controller:v0.13.12
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -1812,12 +1837,9 @@ spec:
               fieldPath: status.podIP
         - name: METALLB_ML_LABELS
           value: app=metallb,component=speaker
-        - name: METALLB_ML_SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              key: secretkey
-              name: memberlist
-        image: quay.io/metallb/speaker:v0.13.9
+        - name: METALLB_ML_SECRET_KEY_PATH
+          value: /etc/ml_secret_key
+        image: quay.io/metallb/speaker:v0.13.12
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -1853,6 +1875,13 @@ spec:
             drop:
             - ALL
           readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /etc/ml_secret_key
+          name: memberlist
+          readOnly: true
+        - mountPath: /etc/metallb
+          name: metallb-excludel2
+          readOnly: true
       hostNetwork: true
       nodeSelector:
         kubernetes.io/os: linux
@@ -1865,6 +1894,15 @@ spec:
       - effect: NoSchedule
         key: node-role.kubernetes.io/control-plane
         operator: Exists
+      volumes:
+      - name: memberlist
+        secret:
+          defaultMode: 420
+          secretName: memberlist
+      - configMap:
+          defaultMode: 256
+          name: metallb-excludel2
+        name: metallb-excludel2
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration

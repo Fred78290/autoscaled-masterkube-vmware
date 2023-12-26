@@ -50,7 +50,6 @@ spec:
       serviceAccountName: external-dns
       nodeSelector:
         kubernetes.io/os: linux
-        master: "true"
       tolerations:
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
@@ -58,7 +57,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: external-dns
-          image: registry.k8s.io/external-dns/external-dns:v0.13.4
+          image: registry.k8s.io/external-dns/external-dns:v0.14.0
           imagePullPolicy: Always
           resources:
             limits:
