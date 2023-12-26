@@ -1,6 +1,10 @@
 #!/bin/bash
 
 # Following from: https://cloud-provider-vsphere.sigs.k8s.io/tutorials/kubernetes-on-vsphere-with-kubeadm.html
+function echo_red_bold() {
+    # echo message in blue and bold
+    >&2 echo -e "\x1B[90m= $(date '+%Y-%m-%d %T') \x1B[31m\x1B[1m\x1B[31m$1\x1B[0m\x1B[39m"
+}
 
 CURDIR=$(dirname $0)
 
@@ -15,6 +19,11 @@ fi
 
 IFS=. read VERSION MAJOR MINOR <<<"${KUBERNETES_VERSION%%+*}"
 VSPHERE_CLOUD_RELEASE="${VERSION}.${MAJOR}.0"
+
+if [ "${VSPHERE_CLOUD_RELEASE}" == "v1.29.0" ]; then
+  echo_red_bold "Temp hack, Kubernetes vSphere Cloud Provider ${VSPHERE_CLOUD_RELEASE} not yet released, use 1.28.0"
+  VSPHERE_CLOUD_RELEASE="v1.28.0"
+fi
 
 if [ -z "$(govc role.ls CNS-DATASTORE | grep 'Datastore.FileManagement')" ]; then
     ROLES="CNS-DATASTORE:Datastore.FileManagement,System.Anonymous,System.Read,System.View
