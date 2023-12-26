@@ -24,6 +24,7 @@ create-vsphere-provisionner.sh
 
 echo_title "Create autoscaler"
 create-autoscaler.sh $LAUNCH_CA
+
 echo_title "Create MetalLB"
 create-metallb.sh
 
