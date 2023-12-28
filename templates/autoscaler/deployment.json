@@ -81,6 +81,8 @@
                             "/usr/local/bin/vsphere-autoscaler",
                             "$EXTERNAL_ETCD_ARGS",
                             "$USE_VANILLA_GRPC_ARGS",
+                            "--max-memory=$MAX_MEMORY",
+                            "--max-cpus=$MAX_VCPUS",
                             "--use-controller-manager",
                             "--src-etcd-ssl-dir=/etc/etcd/ssl",
                             "--dst-etcd-ssl-dir=/etc/etcd/ssl",

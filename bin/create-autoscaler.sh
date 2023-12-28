@@ -22,6 +22,8 @@ export VSPHERE_AUTOSCALER_VERSION=v1.22.5
 export AUTOSCALER_REGISTRY=$REGISTRY
 export CLOUDPROVIDER_CONFIG=/etc/cluster/grpc-config.json
 export USE_VANILLA_GRPC_ARGS=--no-use-vanilla-grpc
+export MAX_MEMORY=$(($(echo -n $MEMORYTOTAL | cut -d ':' -f 2) * 1024))
+export MAX_VCPUS=$(echo -n ${CORESTOTAL} | cut -d ':' -f 2)
 
 if [ "${GRPC_PROVIDER}" = "externalgrpc" ]; then
     USE_VANILLA_GRPC_ARGS=--use-vanilla-grpc
@@ -43,7 +45,7 @@ case $KUBERNETES_MINOR_RELEASE in
         VSPHERE_AUTOSCALER_VERSION=v1.28.4
         ;;
     29)
-        CLUSTER_AUTOSCALER_VERSION=v1.28.2
+        CLUSTER_AUTOSCALER_VERSION=v1.29.0
         VSPHERE_AUTOSCALER_VERSION=v1.29.0
         ;;
     *)
