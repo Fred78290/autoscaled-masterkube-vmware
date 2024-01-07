@@ -19,7 +19,7 @@ CNI_PLUGIN_VERSION=v1.4.0
 SSH_KEY=$(cat ~/.ssh/id_rsa.pub)
 CACHE=~/.local/vmware/cache
 TARGET_IMAGE=${DISTRO}-kubernetes-$KUBERNETES_VERSION
-PASSWORD=$(uuidgen)
+KUBERNETES_PASSWORD=$(uuidgen)
 OSDISTRO=$(uname -s)
 SEEDIMAGE=${DISTRO}-server-cloudimg-seed
 IMPORTMODE="govc"
@@ -29,14 +29,13 @@ PRIMARY_NETWORK_ADAPTER=vmxnet3
 PRIMARY_NETWORK_NAME="$GOVC_NETWORK"
 SECOND_NETWORK_ADAPTER=vmxnet3
 SECOND_NETWORK_NAME=
-SEED_ARCH=$([ "$(uname -m)" == "aarch64" ] && echo -n arm64 || echo -n amd64)
+SEED_ARCH=$([[ "$(uname -m)" =~ arm64|aarch64 ]] && echo -n arm64 || echo -n amd64)
 CONTAINER_ENGINE=docker
 CONTAINER_CTL=docker
-KUBERNETES_DISTRO=kubedm
+KUBERNETES_DISTRO=kubeadm
 
 source $CURDIR/common.sh
 
-mkdir -p $ISODIR
 mkdir -p $CACHE
 
 TEMP=`getopt -o d:a:i:k:n:op:s:u:v: --long k8s-distribution:,aws-access-key:,aws-secret-key:,distribution:,arch:,container-runtime:,user:,adapter:,primary-adapter:,primary-network:,second-adapter:,second-network:,ovftool,seed:,custom-image:,ssh-key:,cni-version:,password:,kubernetes-version: -n "$0" -- "$@"`
@@ -48,7 +47,7 @@ while true ; do
     case "$1" in
         -d|--distribution)
             DISTRO="$2"
-            TARGET_IMAGE=${DISTRO}-kubernetes-$KUBERNETES_VERSION
+            TARGET_IMAGE=${DISTRO}-${KUBERNETES_DISTRO}-${KUBERNETES_VERSION}-${SEED_ARCH}.img
             SEEDIMAGE=${DISTRO}-server-cloudimg-seed
             shift 2
             ;;
@@ -56,7 +55,7 @@ while true ; do
         -k|--ssh-key) SSH_KEY=$2 ; shift 2;;
         -n|--cni-version) CNI_PLUGIN_VERSION=$2 ; shift 2;;
         -o|--ovftool) IMPORTMODE=ovftool ; shift 2;;
-        -p|--password) PASSWORD=$2 ; shift 2;;
+        -p|--password) KUBERNETES_PASSWORD=$2 ; shift 2;;
         -s|--seed) SEEDIMAGE=$2 ; shift 2;;
         -a|--arch) SEED_ARCH=$2 ; shift 2;;
         -u|--user) USER=$2 ; shift 2;;
@@ -113,7 +112,7 @@ if [ -n "$(govc vm.info $TARGET_IMAGE 2>&1)" ]; then
     exit 0
 fi
 
-echo_blue_bold "Ubuntu password:$PASSWORD"
+echo_blue_bold "Ubuntu password:$KUBERNETES_PASSWORD"
 
 BOOTSTRAP_PASSWORD=$(uuidgen)
 read -a VCENTER <<< "$(echo $GOVC_URL | awk -F/ '{print $3}' | tr '@' ' ')"
@@ -126,7 +125,7 @@ chpasswd:
   expire: false
   users:
     - name: ubuntu
-      password: $PASSWORD
+      password: $KUBERNETES_PASSWORD
       type: text
 ssh_pwauth: true
 EOF
@@ -150,11 +149,11 @@ if [ -z "$(govc vm.info $SEEDIMAGE 2>&1)" ]; then
             | jq --arg SSH_KEY "${SSH_KEY}" \
                 --arg SSH_KEY "${SSH_KEY}" \
                 --arg USERDATA "${USERDATA}" \
-                --arg PASSWORD "${BOOTSTRAP_PASSWORD}" \
+                --arg KUBERNETES_PASSWORD "${BOOTSTRAP_PASSWORD}" \
                 --arg NAME "${SEEDIMAGE}" \
                 --arg INSTANCEID $(uuidgen) \
                 --arg TARGET_IMAGE "$TARGET_IMAGE" \
-                '.Name = $NAME | .PropertyMapping |= [ { Key: "instance-id", Value: $INSTANCEID }, { Key: "hostname", Value: $TARGET_IMAGE }, { Key: "public-keys", Value: $SSH_KEY }, { Key: "user-data", Value: $USERDATA }, { Key: "password", Value: $PASSWORD } ]' \
+                '.Name = $NAME | .PropertyMapping |= [ { Key: "instance-id", Value: $INSTANCEID }, { Key: "hostname", Value: $TARGET_IMAGE }, { Key: "public-keys", Value: $SSH_KEY }, { Key: "user-data", Value: $USERDATA }, { Key: "password", Value: $KUBERNETES_PASSWORD } ]' \
                 > ${CACHE}/${DISTRO}-server-cloudimg-${SEED_ARCH}.txt
 
         DATASTORE="/${GOVC_DATACENTER}/datastore/${GOVC_DATASTORE}"
@@ -270,11 +269,11 @@ CRIO_VERSION=$(echo -n $KUBERNETES_VERSION | tr -d 'v' | tr '.' ' ' | awk '{ pri
 
 echo_blue_bold "Prepare ${TARGET_IMAGE} image with cri-o version: $CRIO_VERSION and kubernetes: $KUBERNETES_VERSION"
 
-cat > "${ISODIR}/user-data" <<EOF
+cat > "${CACHE}/user-data" <<EOF
 #cloud-config
 EOF
 
-cat > "${ISODIR}/network.yaml" <<EOF
+cat > "${CACHE}/network.yaml" <<EOF
 #cloud-config
 network:
     version: 2
@@ -283,7 +282,7 @@ network:
             dhcp4: true
 EOF
 
-cat > "${ISODIR}/vendor-data" <<EOF
+cat > "${CACHE}/vendor-data" <<EOF
 #cloud-config
 timezone: $TZ
 ssh_authorized_keys:
@@ -295,14 +294,14 @@ system_info:
         name: kubernetes
 EOF
 
-cat > "${ISODIR}/meta-data" <<EOF
+cat > "${CACHE}/meta-data" <<EOF
 {
     "local-hostname": "$TARGET_IMAGE",
     "instance-id": "$(uuidgen)"
 }
 EOF
 
-cat > "${ISODIR}/prepare-image.sh" << EOF
+cat > "${CACHE}/prepare-image.sh" << EOF
 #!/bin/bash
 SEED_ARCH=${SEED_ARCH}
 CNI_PLUGIN=${CNI_PLUGIN}
@@ -318,8 +317,6 @@ CREDENTIALS_BIN=$CREDENTIALS_BIN
 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
-#sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"/' /etc/default/grub
-#update-grub
 
 echo "==============================================================================================================================="
 echo "= Upgrade ubuntu distro"
@@ -328,19 +325,11 @@ apt update
 apt dist-upgrade -y
 echo
 
-#apt update
-
-#echo "==============================================================================================================================="
-#echo "= Install mandatories packages"
-#echo "==============================================================================================================================="
-#apt install jq socat conntrack net-tools traceroute nfs-common unzip -y
-#echo
-
 mkdir -p /etc/kubernetes
 
 EOF
 
-cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
+cat >> "${CACHE}/prepare-image.sh" <<"EOF"
 echo "net.bridge.bridge-nf-call-ip6tables = 1" >> /etc/sysctl.conf
 echo "net.bridge.bridge-nf-call-iptables = 1" >> /etc/sysctl.conf
 echo "net.bridge.bridge-nf-call-arptables = 1" >> /etc/sysctl.conf
@@ -424,7 +413,7 @@ EOF
 if [ "${KUBERNETES_DISTRO}" == "rke2" ]; then
     echo "prepare rke2 image"
 
-    cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
+    cat >> "${CACHE}/prepare-image.sh" <<"EOF"
     curl -sfL https://get.rke2.io | INSTALL_RKE2_CHANNEL="${KUBERNETES_VERSION}" sh -
 
     pushd /usr/local/bin
@@ -449,7 +438,7 @@ EOF
 elif [ "${KUBERNETES_DISTRO}" == "k3s" ]; then
     echo "prepare k3s image"
 
-    cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
+    cat >> "${CACHE}/prepare-image.sh" <<"EOF"
     curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${KUBERNETES_VERSION}" INSTALL_K3S_SKIP_ENABLE=true sh -
 
     mkdir -p /etc/systemd/system/k3s.service.d
@@ -477,7 +466,7 @@ EOF
 else
     echo "prepare kubeadm image"
 
-    cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
+    cat >> "${CACHE}/prepare-image.sh" <<"EOF"
     function pull_image() {
         DOCKER_IMAGES=$(curl -s $1 | grep -E "\simage: " | sed -E 's/.+image: (.+)/\1/g')
         
@@ -679,7 +668,7 @@ EOF
 
 fi
 
-cat >> "${ISODIR}/prepare-image.sh" <<"EOF"
+cat >> "${CACHE}/prepare-image.sh" <<"EOF"
 apt dist-upgrade -y
 apt autoremove -y
 
@@ -715,11 +704,11 @@ rm -r /tmp/* /tmp/.*-unix /var/tmp/*
 /bin/sync
 EOF
 
-chmod +x "${ISODIR}/prepare-image.sh"
+chmod +x "${CACHE}/prepare-image.sh"
 
-gzip -c9 < "${ISODIR}/meta-data" | base64 -w 0 > ${CACHE}/metadata.base64
-gzip -c9 < "${ISODIR}/user-data" | base64 -w 0 > ${CACHE}/userdata.base64
-gzip -c9 < "${ISODIR}/vendor-data" | base64 -w 0 > ${CACHE}/vendordata.base64
+gzip -c9 < "${CACHE}/meta-data" | base64 -w 0 > ${CACHE}/metadata.base64
+gzip -c9 < "${CACHE}/user-data" | base64 -w 0 > ${CACHE}/userdata.base64
+gzip -c9 < "${CACHE}/vendor-data" | base64 -w 0 > ${CACHE}/vendordata.base64
 
 # Due to my vsphere center the folder name refer more path, so I need to precise the path instead
 if [ "${GOVC_FOLDER}" ]; then
@@ -746,7 +735,7 @@ govc vm.power -on "${TARGET_IMAGE}"
 echo_blue_bold "Wait for IP from ${TARGET_IMAGE}"
 IPADDR=$(govc vm.ip -wait 5m "${TARGET_IMAGE}")
 
-scp "${ISODIR}/prepare-image.sh" "${USER}@${IPADDR}:~"
+scp "${CACHE}/prepare-image.sh" "${USER}@${IPADDR}:~"
 
 ssh -t "${USER}@${IPADDR}" sudo ./prepare-image.sh
 
