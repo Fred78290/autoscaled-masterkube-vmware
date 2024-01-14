@@ -119,10 +119,8 @@ if [ "${OSDISTRO}" == "Darwin" ]; then
     }
 
     TZ=$(sudo systemsetup -gettimezone | awk -F: '{print $2}' | tr -d ' ')
-    ISODIR=~/.local/vmware/cache/iso
 else
     TZ=$(cat /etc/timezone)
-    ISODIR=~/.local/vmware/cache
 
     function delete_host() {
         sudo sed -i "/$1/d" /etc/hosts
