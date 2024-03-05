@@ -20,11 +20,6 @@ fi
 IFS=. read VERSION MAJOR MINOR <<<"${KUBERNETES_VERSION%%+*}"
 VSPHERE_CLOUD_RELEASE="${VERSION}.${MAJOR}.0"
 
-if [ "${VSPHERE_CLOUD_RELEASE}" == "v1.29.0" ]; then
-  echo_red_bold "Temp hack, Kubernetes vSphere Cloud Provider ${VSPHERE_CLOUD_RELEASE} not yet released, use 1.28.0"
-  VSPHERE_CLOUD_RELEASE="v1.28.0"
-fi
-
 if [ -z "$(govc role.ls CNS-DATASTORE | grep 'Datastore.FileManagement')" ]; then
     ROLES="CNS-DATASTORE:Datastore.FileManagement,System.Anonymous,System.Read,System.View
     CNS-HOST-CONFIG-STORAGE:Host.Config.Storage,System.Anonymous,System.Read,System.View
