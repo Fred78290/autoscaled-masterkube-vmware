@@ -1170,6 +1170,19 @@ EOF
         govc vm.clone -link=false -on=false ${FOLDER_OPTIONS} -c=${NUM_VCPUS} -m=${MEMSIZE} -vm=${TARGET_IMAGE} ${MASTERKUBE_NODE} > /dev/null
         govc vm.disk.change ${FOLDER_OPTIONS} -vm ${MASTERKUBE_NODE} -size="${DISK_SIZE}G" > /dev/null
 
+        echo_blue_bold "Change primary network to ${VC_NETWORK_PUBLIC} for ${MASTERKUBE_NODE}"
+		govc vm.network.change -vm "${MASTERKUBE_NODE}" -net="${VC_NETWORK_PUBLIC}" -net.adapter="vmxnet3" ethernet-0
+
+        NUM_ETHERNET=$(govc device.info -vm ${MASTERKUBE_NODE} -json | jq '[.devices[]|select(.backing.network.type == "Network")]|length')
+
+        if [ ${NUM_ETHERNET} -lt 2 ]; then
+            echo_blue_bold "Add second network ${VC_NETWORK_PRIVATE} to ${MASTERKUBE_NODE}"
+			govc vm.network.add -vm "${MASTERKUBE_NODE}" -net="${VC_NETWORK_PRIVATE}" -net.adapter="vmxnet3"
+        else
+            echo_blue_bold "Change second network interface to ${VC_NETWORK_PRIVATE} for ${MASTERKUBE_NODE}"
+			govc vm.network.change -vm "${MASTERKUBE_NODE}" -net="${VC_NETWORK_PRIVATE}" -net.adapter="vmxnet3" ethernet-1
+        fi
+
         echo_title "Set cloud-init settings for ${MASTERKUBE_NODE}"
 
         # Inject cloud-init elements
